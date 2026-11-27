@@ -138,7 +138,6 @@ export function createTraders(engine: Engine, money: Money, path: string, symbol
       else if (moved && !busy && Date.now() - at > AGAIN) void load(key);
     },
     tier(address: string | undefined): Tier | null { return address ? figures(address)?.tier ?? null : null; },
-    volume(address: string | undefined): number | null { return address ? figures(address)?.volumeGnot ?? null : null; },
     /** Paints the panel again, for a change of unit. */
     redraw() { if (open && dialog.open) void show(open); paint(); },
   };
