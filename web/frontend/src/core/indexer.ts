@@ -31,12 +31,16 @@ export interface EventFilter {
 }
 export interface ChainEvent { height: number; type: string; pkg: string; attrs: Record<string, string> }
 
+/** Added to every event's attributes: the transaction's hash (base64) and the account that signed it. */
+export const TX = '@tx', BY = '@by';
+
 interface RawEvent { type?: string; pkg_path?: string; attrs?: { key: string; value: string }[] }
-interface Tx { block_height: number; response: { events: RawEvent[] | null } }
+interface Tx { block_height: number; hash?: string; messages?: { value?: { caller?: string } | null }[] | null; response: { events: RawEvent[] | null } }
 
 const TXS = `query($where: FilterTransaction!, $order: TransactionOrder, $limit: Int) {
   getTransactions(where: $where, order: $order, limit: $limit) {
-    block_height response { events { ... on GnoEvent { type pkg_path attrs { key value } } } }
+    block_height hash messages { value { ... on MsgCall { caller } ... on MsgRun { caller } } }
+    response { events { ... on GnoEvent { type pkg_path attrs { key value } } } }
   }
 }`;
 
@@ -51,7 +55,10 @@ function pick(txs: Tx[] | null, f: EventFilter): ChainEvent[] {
   const out: ChainEvent[] = [];
   for (const tx of txs ?? []) for (const e of tx.response.events ?? []) {
     if (!e.type || !f.types.includes(e.type) || !f.pkg(e.pkg_path ?? '')) continue;
-    const attrs = Object.fromEntries((e.attrs ?? []).map((a) => [a.key, a.value]));
+    const attrs: Record<string, string> = Object.fromEntries((e.attrs ?? []).map((a) => [a.key, a.value]));
+    const by = tx.messages?.find((m) => m.value?.caller)?.value?.caller;
+    if (tx.hash) attrs[TX] = tx.hash;
+    if (by) attrs[BY] = by;
     if (f.attr && !f.attr.values.includes(attrs[f.attr.key] ?? '')) continue;
     out.push({ height: tx.block_height, type: e.type, pkg: e.pkg_path ?? '', attrs });
   }
@@ -68,6 +75,13 @@ function numbered(list: readonly ChainEvent[], c: NonNullable<EventFilter['cache
   });
 }
 
+/** The transaction behind an event and who signed it, when the indexer said so. */
+export function signer(e: ChainEvent): { tx?: string; by?: string } {
+  const o: { tx?: string; by?: string } = {}, tx = e.attrs[TX], by = e.attrs[BY];
+  if (tx) o.tx = tx;
+  if (by) o.by = by;
+  return o;
+}
 export function attr(e: ChainEvent, key: string): string {
   const v = e.attrs[key];
   if (v === undefined) throw new IndexerError(`${e.type} event at block ${e.height} has no "${key}": the contract may have changed its events`);

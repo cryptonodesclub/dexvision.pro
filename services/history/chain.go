@@ -34,6 +34,12 @@ type Source struct {
 	Realms []string // realms this source vouches for
 }
 
+// Added to every event's attributes, as the browser does: the transaction's hash (base64) and its signer.
+const (
+	txAttr = "@tx"
+	byAttr = "@by"
+)
+
 const (
 	poolRealm = "gno.land/r/gnoswap/pool"
 	gnomiBase = "gno.land/r/g1n4pl5uc4yt5r96m9w6fmdznx3x0jyg8l6arhmt/gnomi/"
@@ -46,13 +52,13 @@ var sources = []Source{
 		Stream: "gnoswap:swap", Like: poolRealm, Types: []string{"Swap"}, Realms: []string{poolRealm},
 		Pkg:   func(p string) bool { return p == poolRealm || strings.HasPrefix(p, poolRealm+"/") },
 		Group: func(_ string, a map[string]string) string { return a["poolPath"] },
-		Keep:  []string{"poolPath", "sqrtPriceX96", "token0Amount", "token1Amount"},
+		Keep:  []string{"poolPath", "sqrtPriceX96", "token0Amount", "token1Amount", txAttr, byAttr},
 	},
 	{
 		Stream: "gnomi:trade", Like: gnomiBase, Types: []string{"Buy", "Sell", "SwapBuy", "SwapSell", "Graduated"}, Realms: pads,
 		Pkg:   func(p string) bool { return slices.Contains(pads, p) },
 		Group: func(pkg string, a map[string]string) string { return pkg + ":" + a["id"] },
-		Keep:  []string{"id", "ugnot", "tokens", "poolUgnot", "poolToken"},
+		Keep:  []string{"id", "ugnot", "tokens", "poolUgnot", "poolToken", txAttr, byAttr},
 	},
 }
 
@@ -145,7 +151,13 @@ type rawEvent struct {
 }
 
 type rawTx struct {
-	Height   int `json:"block_height"`
+	Height   int    `json:"block_height"`
+	Hash     string `json:"hash"`
+	Messages []struct {
+		Value struct {
+			Caller string `json:"caller"`
+		} `json:"value"`
+	} `json:"messages"`
 	Response struct {
 		Events []rawEvent `json:"events"`
 	} `json:"response"`
@@ -153,7 +165,8 @@ type rawTx struct {
 
 const txQuery = `query($where: FilterTransaction!, $order: TransactionOrder) {
   getTransactions(where: $where, order: $order) {
-    block_height response { events { ... on GnoEvent { type pkg_path attrs { key value } } } }
+    block_height hash messages { value { ... on MsgCall { caller } ... on MsgRun { caller } } }
+    response { events { ... on GnoEvent { type pkg_path attrs { key value } } } }
   }
 }`
 
@@ -245,6 +258,15 @@ func decode(s Source, txs []rawTx) []Event {
 			a := make(map[string]string, len(e.Attrs))
 			for _, kv := range e.Attrs {
 				a[kv.Key] = kv.Value
+			}
+			if tx.Hash != "" {
+				a[txAttr] = tx.Hash
+			}
+			for _, m := range tx.Messages {
+				if m.Value.Caller != "" {
+					a[byAttr] = m.Value.Caller
+					break
+				}
 			}
 			ev := Event{Height: tx.Height, Type: e.Type, Pkg: e.Pkg, Group: s.Group(e.Pkg, a), Values: make([]string, len(s.Keep))}
 			for i, k := range s.Keep {

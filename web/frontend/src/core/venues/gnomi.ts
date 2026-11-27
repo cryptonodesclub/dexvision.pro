@@ -1,5 +1,5 @@
 import { WUGNOT } from '../config.ts';
-import { attrInt, TAIL, type ChainEvent, type EventFilter } from '../indexer.ts';
+import { attrInt, BY, signer, TAIL, TX, type ChainEvent, type EventFilter } from '../indexer.ts';
 import { mapPool } from '../net.ts';
 import { splitTokenPath } from '../paths.ts';
 import { toUnits } from '../price.ts';
@@ -29,7 +29,7 @@ const PRICE_SCALE = 1e6; // TradeHistory prices are ugnot per token x 1e6
 const GNOT = 1e6;        // ugnot per GNOT
 const TYPES = ['Buy', 'Sell', 'SwapBuy', 'SwapSell', 'Graduated'] as const;
 
-const STREAM = 'gnomi:trade', KEEP = ['id', 'ugnot', 'tokens', 'poolUgnot', 'poolToken'] as const;
+const STREAM = 'gnomi:trade', KEEP = ['id', 'ugnot', 'tokens', 'poolUgnot', 'poolToken', TX, BY] as const;
 const groupOf = (e: ChainEvent) => `${e.pkg}:${e.attrs['id'] ?? ''}`;
 const ID = /^[0-9a-z]{1,16}$/;
 const ref = (m: { id: string }) => { const i = m.id.lastIndexOf(':'); return { pad: m.id.slice(0, i), launch: m.id.slice(i + 1) }; };
@@ -75,7 +75,7 @@ export function parseTradeHistory(text: string): Sample[] {
   });
 }
 
-interface Point { height: number; scaled: bigint; ugnot: bigint; tokens: bigint; buy: boolean }
+interface Point { height: number; scaled: bigint; ugnot: bigint; tokens: bigint; buy: boolean; tx?: string; by?: string }
 /**
  * Full event history when its replay agrees with every price the contract still remembers;
  * otherwise the contract's own trades, which are partial once its ring buffer is full.
@@ -83,7 +83,7 @@ interface Point { height: number; scaled: bigint; ugnot: bigint; tokens: bigint;
 export function reconcile(events: readonly ChainEvent[], history: readonly Sample[], indexedTo: number): { trusted: boolean; partial: boolean; points: Point[] } {
   const c = newCurve(), points = events.flatMap((e): Point[] => {
     const r = replay(c, e);
-    return r ? [{ height: e.height, scaled: spotScaled(c), ...r }] : [];
+    return r ? [{ height: e.height, scaled: spotScaled(c), ...r, ...signer(e) }] : [];
   });
   // the RPC can be ahead of the indexer, and the opening mark is not a trade
   const tail = history.filter((h) => h.height <= indexedTo && (h.ugnot > 0n || h.tokens > 0n));
@@ -94,6 +94,23 @@ export function reconcile(events: readonly ChainEvent[], history: readonly Sampl
 }
 
 export const GNOMI_HISTORY = { stream: STREAM, keep: KEEP, realms: PADS };
+
+function fillOf(p: Point, unit: number, decimals: number): Fill {
+  const f: Fill = { height: p.height, buy: p.buy, price: Number(p.scaled) * unit, amount0: toUnits(p.tokens, decimals), amount1: toUnits(p.ugnot, 6) };
+  if (p.tx) f.tx = p.tx;
+  if (p.by) f.by = p.by;
+  return f;
+}
+/** Gives each trade the transaction of the trade event at its block, in chain order. */
+export function withSigners(fills: Fill[], events: readonly ChainEvent[]): Fill[] {
+  const at = new Map<number, ChainEvent[]>(), used = new Map<number, number>();
+  for (const e of events) if (e.type !== 'Graduated') at.set(e.height, [...(at.get(e.height) ?? []), e]);
+  return fills.map((f) => {
+    const n = used.get(f.height) ?? 0, e = at.get(f.height)?.[n];
+    used.set(f.height, n + 1);
+    return e ? { ...f, ...signer(e) } : f;
+  });
+}
 
 export const LAUNCH_CREATED = (pad: string): EventFilter => ({ types: ['Created'], pkg: (p) => p === pad, pkgLike: pad });
 
@@ -171,7 +188,7 @@ export function gnomi(ctx: VenueContext, pads: readonly string[] = PADS): Venue 
       if (!checked.trusted) { await ctx.indexer.forget(STREAM, m.id); ({ events, history } = await read()); checked = reconcile(events, history, latest); }
       const { trusted, partial, points } = checked;
       const unit = unitOf(t);
-      const all = points.map((p) => ({ height: p.height, buy: p.buy, price: Number(p.scaled) * unit, amount0: toUnits(p.tokens, t.decimals), amount1: toUnits(p.ugnot, 6) }));
+      const all = points.map((p) => fillOf(p, unit, t.decimals));
       // a launch opens at a fixed price; the opening mark dates it while the ring still holds it
       const open = history[0]?.side === 2 && history[0].ugnot === 0n ? history[0] : undefined;
       const seed = all.filter((p) => p.height < from).at(-1)?.price ?? (trusted && open && open.height < from ? Number(open.scaled) * unit : undefined);
@@ -184,7 +201,7 @@ export function gnomi(ctx: VenueContext, pads: readonly string[] = PADS): Venue 
       // a curve can only be replayed from its very start
       if (!got || !got.covered.some(([a, b]) => a <= Math.max(1, m.height) && b > got.events.at(-1)!.height)) return null;
       const t = await ctx.token(m.token0), unit = unitOf(t), { points } = reconcile(got.events, [], 0);
-      return { fills: points.map((p) => ({ height: p.height, buy: p.buy, price: Number(p.scaled) * unit, amount0: toUnits(p.tokens, t.decimals), amount1: toUnits(p.ugnot, 6) })).filter((p) => p.amount0 > 0) };
+      return { fills: points.map((p) => fillOf(p, unit, t.decimals)).filter((p) => p.amount0 > 0) };
     },
 
     async mine(m, account, to) {
@@ -193,14 +210,16 @@ export function gnomi(ctx: VenueContext, pads: readonly string[] = PADS): Venue 
       return events.flatMap((e): Fill[] => {
         if ((e.attrs['buyer'] ?? e.attrs['seller']) !== account) return [];
         const amount0 = toUnits(attrInt(e, 'tokens'), t.decimals), amount1 = toUnits(attrInt(e, 'ugnot'), 6);
-        return amount0 > 0 ? [{ height: e.height, buy: e.type === 'Buy' || e.type === 'SwapBuy', price: amount1 / amount0, amount0, amount1 }] : [];
+        return amount0 > 0 ? [{ height: e.height, buy: e.type === 'Buy' || e.type === 'SwapBuy', price: amount1 / amount0, amount0, amount1, ...signer(e) }] : [];
       });
     },
 
     async recent(ms, from, to) {
+      // the contract's own trades name no transaction: the events of the same blocks do
+      const signed = ms.length ? ctx.indexer.events({ types: TYPES, pkg: (p) => pads.includes(p), pkgLike: OWNER, cache: { stream: STREAM, group: null, groupOf, keep: KEEP } }, Math.max(1, from), to).catch(() => []) : Promise.resolve([]);
       const got = await Promise.allSettled(ms.map(async (m): Promise<[string, Fills]> => {
-        const [t, h] = await Promise.all([ctx.token(m.token0), past(m)]), unit = unitOf(t);
-        const fills = h.filter((x) => x.height >= from && x.height < to && x.side !== 2).map((x) => ({ height: x.height, buy: x.side === 0, price: Number(x.scaled) * unit, amount0: toUnits(x.tokens, t.decimals), amount1: toUnits(x.ugnot, 6) }));
+        const [t, h, events] = await Promise.all([ctx.token(m.token0), past(m), signed]), unit = unitOf(t);
+        const fills = withSigners(h.filter((x) => x.height >= from && x.height < to && x.side !== 2).map((x) => ({ height: x.height, buy: x.side === 0, price: Number(x.scaled) * unit, amount0: toUnits(x.tokens, t.decimals), amount1: toUnits(x.ugnot, 6) })), events.filter((e) => groupOf(e) === m.id));
         const before = h.filter((x) => x.height < from).at(-1), out: Fills = { fills, partial: !before && h.length >= RING };
         if (before) out.seed = Number(before.scaled) * unit;
         return [m.id, out];

@@ -1,5 +1,5 @@
 import { isAccount, realmAddress } from '../address.ts';
-import { attrInt, TAIL, attr, type ChainEvent, type EventFilter } from '../indexer.ts';
+import { attrInt, BY, signer, TAIL, TX, attr, type ChainEvent, type EventFilter } from '../indexer.ts';
 import { mapPool } from '../net.ts';
 import { assertPoolPath } from '../paths.ts';
 import { price0in1, toUnits } from '../price.ts';
@@ -19,7 +19,7 @@ const abs = (n: bigint) => (n < 0n ? -n : n);
 export interface PoolInfo { path: string; token0: string; token1: string; fee: number; height: number; sqrtPriceX96: bigint }
 
 export const POOL_CREATED: EventFilter = { types: ['CreatePool'], pkg: isPool, pkgLike: POOL };
-const STREAM = 'gnoswap:swap', KEEP = ['poolPath', 'sqrtPriceX96', 'token0Amount', 'token1Amount'] as const;
+const STREAM = 'gnoswap:swap', KEEP = ['poolPath', 'sqrtPriceX96', 'token0Amount', 'token1Amount', TX, BY] as const;
 export const GNOSWAP_HISTORY = { stream: STREAM, keep: KEEP, realms: [POOL] } as const;
 const poolOf = (e: ChainEvent) => e.attrs['poolPath'] ?? '';
 const ALL_SWAPS: EventFilter = { types: ['Swap'], pkg: isPool, pkgLike: POOL, cache: { stream: STREAM, group: null, groupOf: poolOf, keep: KEEP } };
@@ -44,7 +44,7 @@ export function gnoswap(ctx: VenueContext, seed: PoolSeed = SEED): Venue {
     return [a.decimals, b.decimals];
   };
 
-  const decode = (e: ChainEvent, [d0, d1]: [number, number]): Fill => ({ height: e.height, buy: attrInt(e, 'token0Amount') < 0n, price: price0in1(attrInt(e, 'sqrtPriceX96'), d0, d1), amount0: toUnits(abs(attrInt(e, 'token0Amount')), d0), amount1: toUnits(abs(attrInt(e, 'token1Amount')), d1) });
+  const decode = (e: ChainEvent, [d0, d1]: [number, number]): Fill => ({ height: e.height, buy: attrInt(e, 'token0Amount') < 0n, price: price0in1(attrInt(e, 'sqrtPriceX96'), d0, d1), amount0: toUnits(abs(attrInt(e, 'token0Amount')), d0), amount1: toUnits(abs(attrInt(e, 'token1Amount')), d1), ...signer(e) });
   /** Price just before a height: the last swap, or the creation price once the pool exists. */
   async function seedAt(p: PoolInfo, at: number, [d0, d1]: [number, number]): Promise<number | undefined> {
     if (p.height >= at) return undefined;

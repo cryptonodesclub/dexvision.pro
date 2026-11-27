@@ -79,7 +79,7 @@ export interface MarketRow {
   gap: number | null;          // percent away from the token's price
   volume: number | null; trades: number | null;
 }
-export interface TradeRow { market: string; venue: string; pairedWith: string; time: number; height: number; buy: boolean; price: number; priceGnot: number | null; amount: number; valueGnot: number | null }
+export interface TradeRow { market: string; venue: string; pairedWith: string; time: number; height: number; buy: boolean; price: number; priceGnot: number | null; amount: number; valueGnot: number | null; tx?: string; by?: string }
 export interface Detail { row: Row; markets: MarketRow[]; trades: TradeRow[] }
 
 /** One token seen from its own side: every market it trades in, and who traded lately. */
@@ -95,7 +95,10 @@ export function detail(s: Snapshot, a: Activity | null, path: string, window: nu
       const time = a!.times.get(x.height);
       if (time === undefined) return [];
       const p = is0 ? x.price : 1 / x.price, paid = is0 ? x.amount1 : x.amount0;
-      return [{ market: m.key, venue: m.venue, pairedWith, time, height: x.height, buy: is0 === x.buy, price: p, priceGnot: q === null ? null : p * q, amount: is0 ? x.amount0 : x.amount1, valueGnot: q === null ? null : paid * q }];
+      const row: TradeRow = { market: m.key, venue: m.venue, pairedWith, time, height: x.height, buy: is0 === x.buy, price: p, priceGnot: q === null ? null : p * q, amount: is0 ? x.amount0 : x.amount1, valueGnot: q === null ? null : paid * q };
+      if (x.tx) row.tx = x.tx;
+      if (x.by) row.by = x.by;
+      return [row];
     });
     trades.push(...recent);
     const inside = recent.filter((t) => t.time >= since);

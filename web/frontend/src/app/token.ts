@@ -9,7 +9,7 @@ import { age, amount, count, esc, pct, price } from './format.ts';
 import { createHolders } from './holders.ts';
 import { createLiquidity } from './liquidity.ts';
 import { createMoney } from './money.ts';
-import { pathFromLocation, realmPage, shortRealm, symbolOf, tokenUrl } from './links.ts';
+import { explorer, pathFromLocation, realmPage, shortAddress, shortRealm, symbolOf, tokenUrl, txUrl } from './links.ts';
 import { networkSwitch } from './netswitch.ts';
 import { spectrum, tone } from './spectrum.ts';
 import { createStage, narrowHole, searchKeys } from './stage.ts';
@@ -57,7 +57,7 @@ const own = new Map<string, Set<string>>();
 let owner: string | null = null;
 /** Header sorting. Trades run newest first until a header says otherwise. */
 const BY_MARKET: Keys<MarketRow> = { pair: (x) => symbolOf(x.pairedWith), market: (x) => x.venue, fee: (x) => x.feePct, price: (x) => x.priceGnot, gap: (x) => (x.main ? 0 : x.gap), depth: (x) => x.depthGnot, volume: (x) => x.volume, trades: (x) => x.trades };
-const BY_TRADE: Keys<Detail['trades'][number]> = { time: (t) => t.time, side: (t) => (t.buy ? 'Buy' : 'Sell'), amount: (t) => t.amount, price: (t) => t.priceGnot, value: (t) => t.valueGnot, block: (t) => t.height };
+const BY_TRADE: Keys<Detail['trades'][number]> = { time: (t) => t.time, side: (t) => (t.buy ? 'Buy' : 'Sell'), amount: (t) => t.amount, price: (t) => t.priceGnot, value: (t) => t.valueGnot, trader: (t) => t.by ?? null, block: (t) => t.height };
 const marketOrder = sortable($('markets').closest('table')!, () => render()), tradeOrder = sortable($('trades').closest('table')!, () => render());
 const pick = (d: Detail): MarketRow => d.markets.find((m) => m.key === view.market) ?? d.markets[0]!;
 
@@ -89,7 +89,7 @@ function render() {
   const mine = sortBy(d.trades.filter((t) => t.market === m.key), tradeOrder, BY_TRADE), list = view.all ? mine : mine.slice(0, SHOWN);
   $('amt-of').textContent = symbol; $('q-sym').textContent = symbol;
   $('trades-of').textContent = `${symbol} / ${symbolOf(m.pairedWith)}, ${m.venue}${money.unit() === 'USD' ? ', in dollars at today’s GNOT price' : ''}`;
-  $('trades').innerHTML = list.map((t) => `<tr><td class="l">${esc(ago(t.time, now))}</td><td class="l c ${t.buy ? 'up' : 'down'}">${t.buy ? 'Buy' : 'Sell'}${own.get(m.key)?.has(`${t.height}|${t.amount}`) ? ' <span class="you">you</span>' : ''}</td><td${money.attrs(t.valueGnot, 'amount', true, true)}>${amount(t.amount)}</td><td${money.attrs(t.priceGnot, 'price', true)}>${money.text(t.priceGnot, 'price')}</td><td${money.attrs(t.valueGnot, 'amount', true)}>${money.text(t.valueGnot, 'amount')}</td><td>${count(t.height)}</td></tr>`).join('');
+  $('trades').innerHTML = list.map((t) => `<tr><td class="l">${esc(ago(t.time, now))}</td><td class="l c ${t.buy ? 'up' : 'down'}">${t.buy ? 'Buy' : 'Sell'}${own.get(m.key)?.has(`${t.height}|${t.amount}`) ? ' <span class="you">you</span>' : ''}</td><td${money.attrs(t.valueGnot, 'amount', true, true)}>${amount(t.amount)}</td><td${money.attrs(t.priceGnot, 'price', true)}>${money.text(t.priceGnot, 'price')}</td><td${money.attrs(t.valueGnot, 'amount', true)}>${money.text(t.valueGnot, 'amount')}</td><td class="l who">${t.by ? `<a href="${esc(explorer({ address: t.by }))}" title="${esc(t.by)}" target="_blank" rel="noopener">${esc(shortAddress(t.by))}</a>` : '<span class="flat">n/a</span>'}</td><td class="l who">${t.tx ? `<a href="${esc(txUrl(t.tx))}" title="${esc(t.tx)}" target="_blank" rel="noopener">${esc(t.tx.slice(0, 8))}…</a>` : '<span class="flat">n/a</span>'}</td><td>${count(t.height)}</td></tr>`).join('');
   const more = $('more'); more.hidden = mine.length <= SHOWN; more.textContent = view.all ? 'Show fewer' : `Show all ${mine.length}`;
   const none = $('no-trades'); none.hidden = mine.length > 0;
   none.textContent = !state.activity ? 'Reading trades' : 'No trades here in the last 7 days.';

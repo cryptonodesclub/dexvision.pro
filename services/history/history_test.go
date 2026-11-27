@@ -102,7 +102,8 @@ func (f *fakeChain) server(t *testing.T) *Client {
 					evs = []any{ev("Buy", pads[0], "id", "1", "ugnot", "9", "tokens", "8"), ev("Buy", gnomiBase+"padv9", "id", "1", "ugnot", "9", "tokens", "8"), ev("BuyRefund", pads[0], "id", "1")}
 				}
 				if evs != nil {
-					txs = append(txs, map[string]any{"block_height": h, "response": map[string]any{"events": evs}})
+					txs = append(txs, map[string]any{"block_height": h, "hash": fmt.Sprintf("tx%d=", h),
+						"messages": []any{map[string]any{"value": map[string]any{"caller": "g1caller"}}}, "response": map[string]any{"events": evs}})
 				}
 			}
 			data(map[string]any{"getTransactions": txs})
@@ -127,7 +128,7 @@ func TestScanKeepsOnlyWhatTheSourceVouchesFor(t *testing.T) {
 	if len(sw) != 29 || len(tr) != 11 {
 		t.Fatalf("got %d swaps and %d trades", len(sw), len(tr))
 	}
-	want := Event{Height: 10, Type: "Swap", Pkg: poolRealm + "/v1", Group: poolA, Values: []string{poolA, sqrtAt(10), "7", "-3"}}
+	want := Event{Height: 10, Type: "Swap", Pkg: poolRealm + "/v1", Group: poolA, Values: []string{poolA, sqrtAt(10), "7", "-3", "tx10=", "g1caller"}}
 	if !reflect.DeepEqual(sw[0], want) {
 		t.Errorf("got %+v", sw[0])
 	}

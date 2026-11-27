@@ -30,7 +30,7 @@ export function createFeed(engine: Engine, onChange: (s: FeedState) => void, opt
     const t = localStorage.getItem(key); st.snap = t ? unpack(t) : null;
   } catch { /* storage blocked */ }
   const emit = () => onChange({ ...st });
-  const keep = `activity:v1:${scope ?? 'all'}`;
+  const keep = `activity:v2:${scope ?? 'all'}`; // v2: trades carry their transaction and signer
   // last visit's trades, so the page is whole before the chain answers
   const was = engine.indexer.recall<Activity>(keep).then((a) => { if (a && a.span >= span && st.snap && !st.activity) { st.activity = a; emit(); } }, () => undefined);
 

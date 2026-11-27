@@ -8,14 +8,14 @@ import { HISTORY } from '../src/core/venues/index.ts';
 import golden from '../../../services/history/testdata/small.json';
 import { WUGNOT } from '../src/core/config.ts';
 import { createEngine } from '../src/core/engine.ts';
-import { Indexer, IndexerError, TAIL, type ChainEvent, type EventFilter } from '../src/core/indexer.ts';
+import { BY, Indexer, IndexerError, signer, TAIL, TX, type ChainEvent, type EventFilter } from '../src/core/indexer.ts';
 import { mapPool, postJson } from '../src/core/net.ts';
 import { assertPoolPath, InputError, parseRealm } from '../src/core/paths.ts';
 import { candles, ema, price0in1, priceAll, relevant, sides, type PricedMarket } from '../src/core/price.ts';
 import { detail, pick, priceAt, summarize, type Activity, type LiveMarket, type Row, type Snapshot } from '../src/core/overview.ts';
 import { age, amount, esc, pct, price as fmtPrice, usd, usdAmount, usdPrice } from '../src/app/format.ts';
 import { display, other } from '../src/app/money.ts';
-import { pathFromLocation, tokenUrl } from '../src/app/links.ts';
+import { pathFromLocation, shortAddress, tokenUrl, txUrl } from '../src/app/links.ts';
 import { cast, layout } from '../src/app/constellation.ts';
 import { widen } from '../src/app/chart.ts';
 import { digest, share } from '../src/app/holders.ts';
@@ -25,7 +25,7 @@ import { realmAddress as addressOf } from '../src/core/address.ts';
 import { add, emptyLedger, groupsOf, hasSigned, linksOf, ranked, readLedger, totalOf, type Holder } from '../src/core/holders.ts';
 import { gnotUsd } from '../src/core/usd.ts';
 import { parseGno, Rpc } from '../src/core/rpc.ts';
-import { gnomi, newCurve, parseTradeHistory, reconcile, replay, spotScaled } from '../src/core/venues/gnomi.ts';
+import { gnomi, newCurve, parseTradeHistory, reconcile, replay, spotScaled, withSigners } from '../src/core/venues/gnomi.ts';
 import { gnoswap, POOL_CREATED } from '../src/core/venues/gnoswap.ts';
 import type { Market, Venue, VenueContext, VenueFactory } from '../src/core/venues/venue.ts';
 import { decodeResult, encodeTx, type Call } from '../src/core/trade/proto.ts';
@@ -627,8 +627,8 @@ describe('published history', () => {
   it('reads the file the Go service writes', () => {
     const d = decodeHistory(golden, 'gnoland-1', HISTORY), sw = d.streams.get('gnoswap:swap')!, tr = d.streams.get('gnomi:trade')!;
     expect([d.height, sw.length, tr.length]).toEqual([120, 11, 4]);
-    expect(sw[0]).toEqual({ group: POOL_A, seq: 0, event: { height: 10, type: 'Swap', pkg: 'gno.land/r/gnoswap/pool/v1', attrs: { poolPath: POOL_A, sqrtPriceX96: '1000010', token0Amount: '7', token1Amount: '-3' } } });
-    expect(tr.at(-1)).toMatchObject({ event: { height: 100, type: 'Buy', attrs: { id: '1', ugnot: '9', tokens: '8' } } });
+    expect(sw[0]).toEqual({ group: POOL_A, seq: 0, event: { height: 10, type: 'Swap', pkg: 'gno.land/r/gnoswap/pool/v1', attrs: { poolPath: POOL_A, sqrtPriceX96: '1000010', token0Amount: '7', token1Amount: '-3', '@tx': 'tx10=', '@by': 'g1caller' } } });
+    expect(tr.at(-1)).toMatchObject({ event: { height: 100, type: 'Buy', attrs: { id: '1', ugnot: '9', tokens: '8', '@tx': 'tx100=', '@by': 'g1caller' } } });
     expect(new Map(d.times).get(10)).toBe(1e12 + 30_000);
   });
   it('refuses damage instead of believing it', () => {
@@ -995,4 +995,28 @@ describe('table sorting', () => {
   });
   it('sorts text without case, numbers inside it as numbers', () => expect(ids('n', false)).toBe('A a2 b c'));
   it('leaves the order alone with no column', () => expect(ids(null, true)).toBe('b A c a2'));
+});
+
+describe('who traded', () => {
+  const SWAP: EventFilter = { types: ['Swap'], pkg: (p) => p === 'gno.land/r/gnoswap/pool', pkgLike: 'gno.land/r/gnoswap/pool' };
+  it('names the transaction and its signer on every event', async () => {
+    let query = '';
+    const ix = new Indexer('https://i.test', { retries: 0, fetch: (async (_u: unknown, i: RequestInit) => { query = JSON.parse(String(i.body)).query; return reply({ data: { getTransactions: [
+      { block_height: 7, hash: 'abc+/=', messages: [{ value: {} }, { value: { caller: 'g1me' } }], response: { events: [{ type: 'Swap', pkg_path: 'gno.land/r/gnoswap/pool', attrs: [{ key: 'poolPath', value: 'p' }] }] } },
+      { block_height: 8, response: { events: [{ type: 'Swap', pkg_path: 'gno.land/r/gnoswap/pool', attrs: [] }] } },
+    ] } }); }) as typeof fetch });
+    const [a, b] = await ix.events(SWAP, 1, 10);
+    expect(query).toContain('hash'); expect(query).toContain('caller');
+    expect(a!.attrs).toEqual({ poolPath: 'p', [TX]: 'abc+/=', [BY]: 'g1me' }); expect(signer(a!)).toEqual({ tx: 'abc+/=', by: 'g1me' });
+    expect(signer(b!)).toEqual({}); // an older indexer: the row shows n/a
+  });
+  it('gives contract-kept trades the transaction of their block, in order', () => {
+    const ev = (height: number, type: string, tx: string): ChainEvent => ({ height, type, pkg: 'p', attrs: { [TX]: tx, [BY]: 'g1' + tx } });
+    const f = (height: number) => ({ height, price: 1, amount0: 1, amount1: 1, buy: true });
+    expect(withSigners([f(5), f(5), f(6), f(9)], [ev(5, 'Buy', 'a'), ev(5, 'Sell', 'b'), ev(6, 'Graduated', 'g'), ev(6, 'Buy', 'c')]).map((x) => x.tx ?? '-')).toEqual(['a', 'b', 'c', '-']);
+  });
+  it('links to gnoscan and keeps addresses short', () => {
+    expect(txUrl('ab+/=')).toBe('https://gnoscan.io/transactions/details?txhash=ab%2B%2F%3D');
+    expect(shortAddress('g1uzqhpyuus8zwvuaszwfv38f3actnz9ar5tg5ms')).toBe('g1uzqhpy…g5ms');
+  });
 });

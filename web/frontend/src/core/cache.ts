@@ -59,7 +59,7 @@ export interface Store {
 /** Group under which a read of the whole stream is recorded. It covers every group. */
 export const ALL = '*';
 
-const VERSION = 1;
+const VERSION = 2; // 2: events carry their transaction hash and signer
 const req = <T>(r: IDBRequest<T>) => new Promise<T>((ok, no) => { r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error); });
 const done = (t: IDBTransaction) => new Promise<void>((ok, no) => { t.oncomplete = () => ok(); t.onerror = t.onabort = () => no(t.error ?? new Error('transaction aborted')); });
 

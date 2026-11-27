@@ -14,7 +14,7 @@ export interface MarketState {
   stage?: string;    // e.g. "curve", shown to people
 }
 /** A trade, with the market price after it. Amounts are absolute, human units. */
-export interface Fill { height: number; price: number; amount0: number; amount1: number; buy: boolean } // buy: token0 was bought
+export interface Fill { height: number; price: number; amount0: number; amount1: number; buy: boolean; tx?: string; by?: string } // buy: token0 was bought; tx: hash, by: signer
 /** `seed`: price just before the range, if known. `partial`: older trades in the range may be missing. */
 export interface Fills { seed?: number; fills: Fill[]; partial?: boolean }
 
