@@ -1,0 +1,122 @@
+---
+import '@fontsource-variable/anybody/standard.css';
+import '@fontsource-variable/martian-mono/standard.css';
+import '../../../lab/hz.css';
+import Head from '../../../lab/HzHead.astro';
+import Market from '../../../lab/HzMarket.astro';
+import Switch from '../../../lab/HzSwitch.astro';
+---
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <title>DexVision Horizon Shadow</title>
+</head>
+<body>
+  <canvas id="hole" aria-hidden="true"></canvas>
+  <Head />
+  <main id="top">
+    <section class="hero" id="hero">
+      <ol id="inside" aria-label="Trending pairs"></ol>
+      <h1 id="cup" aria-label="Watch price bend"></h1>
+    </section>
+    <section class="market">
+      <div class="intro">
+        <p>Every pair on gno.land. <b class="up">Blue is coming toward you.</b> <b class="down">Red is leaving.</b></p>
+        <dl class="chain" id="chain"></dl>
+      </div>
+      <Market />
+    </section>
+  </main>
+  <Switch current="shadow" />
+  <script>
+    import { horizon, type Scene } from '../../../lab/horizon';
+    import { market, tone } from '../../../lab/hz';
+    import { view, price, pct, type Token } from '../../../lab/market';
+    const $ = (id: string) => document.getElementById(id)!;
+
+    const scene: Scene = { incl: 1.06, roll: 0.5, zoom: 1.6, dim: 1, off: [0, 0.1], t: 8, outer: 7.6, jitter: 1, fall: 2.1, glow: 1.15 };
+    /* geometry in CSS px, recomputed on resize */
+    const g = { cx: 0, cy: 0, R: 0, base: 0 };
+    const cup = $('cup'), letters: HTMLElement[] = [];
+    for (const word of ['WATCH', 'PRICE', 'BEND']) {
+      const w = document.createElement('span'); w.setAttribute('aria-hidden', 'true');
+      for (const c of word) { const i = document.createElement('i'); i.textContent = c; w.append(i); letters.push(i); }
+      cup.append(w);
+    }
+    let cap = 1, base = 0, drop = 0;
+    function layout() {
+      const W = innerWidth, H = innerHeight, narrow = W < 820;
+      g.R = narrow ? Math.min(W * 0.4, H * 0.27) : Math.min(H * 0.29, W * 0.21);
+      g.cx = W / 2; g.cy = narrow ? 120 + g.R * 1.35 : H * 0.41;
+      g.base = narrow ? g.cy + g.R * 2.15 : H * 0.92;
+      scene.zoom = g.R / (0.1755 * H);
+      scene.off = [0, 0.5 - g.cy / H];
+      $('hero').style.height = g.base - $('hero').offsetTop + 'px';
+      const inside = $('inside'); inside.style.top = g.cy - $('hero').offsetTop + 'px';
+      // pivot every letter on its real baseline so the stretched row stays flush
+      const probe = document.createElement('b'); probe.style.cssText = 'display:inline-block;width:0;height:0'; letters[0].append(probe);
+      base = probe.offsetTop + probe.offsetHeight - letters[0].offsetTop; drop = letters[0].offsetHeight - base; probe.remove();
+      const cs = getComputedStyle(cup), ctx = document.createElement('canvas').getContext('2d')!; ctx.font = `640 ${cs.fontSize} ${cs.fontFamily}`;
+      cap = ctx.measureText('H').actualBoundingBoxAscent; letters.forEach((l) => { l.style.transformOrigin = `50% ${base}px`; });
+      bend(0); chords();
+    }
+    /* each letter reaches up until it meets the light around the hole */
+    const mouse = { x: -9999, y: 0 }; addEventListener('pointermove', (e) => { mouse.x = e.clientX; mouse.y = e.clientY; });
+    function bend(t: number) {
+      const W = innerWidth, top = g.cy, Rc = g.R * 1.42;
+      letters.forEach((l, i) => {
+        const r = l.offsetLeft + l.offsetWidth / 2, dx = Math.abs(r - g.cx);
+        const x = Math.min(1, dx / (W / 2));
+        let h = g.base - (top + g.R * 1.5) + (g.R * 2.15) * Math.pow(x, 1.9);
+        if (dx < Rc) h = Math.min(h, g.base - (top + Math.sqrt(Rc * Rc - dx * dx)));
+        h *= 1 + 0.018 * Math.sin(t * 0.9 + i * 0.7);
+        h += 46 * Math.exp(-Math.pow((r - mouse.x) / 110, 2)) * (mouse.y > top ? 1 : 0);
+        l.style.transform = `translateY(${drop}px) scaleY(${(Math.max(34, h) / cap).toFixed(3)})`;
+      });
+    }
+    /* list rows take the chord of the circle at their height */
+    const ROWS = 7; let shown: Token[] = [];
+    function chords() {
+      const r = g.R * 0.82, lis = $('inside').querySelectorAll<HTMLElement>('li');
+      const rh = (r * 1.5) / ROWS;
+      lis.forEach((li, i) => {
+        const y = (i - (lis.length - 1) / 2) * rh, near = 1 - Math.abs(y) / r;
+        li.style.width = 2 * Math.sqrt(Math.max(0, r * r - y * y)) * 0.94 + 'px'; li.style.height = rh + 'px';
+        li.style.fontSize = Math.max(11, g.R * (0.044 + near * 0.026)) + 'px';
+        li.style.setProperty('--w', String(Math.round(64 + near * 80)));
+      });
+    }
+    const fillInside = () => {
+      $('inside').innerHTML = shown.map((t) => { const c = t.ch[m.state.win]; return `<li><a href="#row-${t.sym}"><b>${t.sym}</b><span>${price(t.price)}</span><em class="${tone(c)}">${pct(c)}</em></a></li>`; }).join('');
+      chords();
+    };
+    const m = market({ onList: () => { shown = view(m.state.tab, m.state.win).slice(0, ROWS); fillInside(); }, onTick: (c) => { if (c.some((t) => shown.includes(t)) && !$('inside').matches(':hover, :focus-within')) fillInside(); } });
+    m.start();
+    layout(); addEventListener('resize', layout); document.fonts.ready.then(layout);
+    horizon($('hole') as HTMLCanvasElement, scene, () => {
+      const s = Math.min(1, scrollY / innerHeight);
+      scene.dim = 1 - s * 0.82; scene.off[1] = 0.5 - (g.cy - scrollY * 0.55) / innerHeight; scene.incl = 1.06 - s * 0.5;
+      bend(scene.t);
+    });
+  </script>
+</body>
+</html>
+<style is:global>
+  /* Layout: the shadow is the screen. Headline letters stretch up to touch its light. */
+  #hole { position: fixed; inset: 0; width: 100%; height: 100%; }
+  #hole[data-failed] { background: radial-gradient(circle at 50% 43%, #000 0 25%, #ffd9a8 25.4%, #ff7a24 31%, #4a0d04 44%, transparent 60%); }
+  .hero { position: relative; z-index: 1; }
+  #inside { position: absolute; left: 50%; translate: -50% -50%; list-style: none; margin: 0; padding: 0; display: grid; justify-items: center; z-index: 2; }
+  #inside a { height: 100%; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; text-decoration: none; font-variant-numeric: tabular-nums; }
+  #inside b { font: 800 1.45em/1 var(--display); font-variation-settings: 'wdth' var(--w, 100); } #inside em { font-style: normal; font-weight: 600; text-align: right; } #inside span { color: var(--ink); }
+  #inside a:hover b, #inside a:focus-visible b { color: var(--ember); }
+  h1 { position: absolute; left: 0; right: 0; bottom: 0; margin: 0; padding: 0 1vw; display: flex; justify-content: space-between; font: 640 7.9vw/.7 var(--display); pointer-events: none; }
+  h1 span { display: flex; } h1 i { font-style: normal; display: block; height: .7em; line-height: .7em; transform-origin: 50% 100%; font-variation-settings: 'wdth' 128; will-change: transform; }
+  h1 span:nth-child(1), h1 span:nth-child(2) { color: var(--ink); } h1 span:nth-child(3) { color: var(--ember); }
+  .market { position: relative; z-index: 3; padding: 26px var(--gut) 90px; background: linear-gradient(#07040500, #070405f0 60px); }
+  .intro { display: flex; flex-wrap: wrap; gap: 18px 60px; justify-content: space-between; align-items: end; padding: 14px 0 44px; } .intro p { margin: 0; font-size: 15px; max-width: 48ch; } .intro b { font-weight: 500; }
+  @media (max-width: 820px) { h1 { font-size: 7.3vw; } #inside span { display: none; } #inside a { grid-template-columns: 1fr auto; } }
+</style>

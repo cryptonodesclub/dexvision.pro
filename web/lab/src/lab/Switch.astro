@@ -1,0 +1,16 @@
+---
+/** Review-only control to jump between directions. Not part of the product. */
+const { current } = Astro.props as { current: number };
+const items = [['1', 'Horizon'], ['2', 'Colony'], ['3', 'Source']];
+---
+<nav class="lab-switch" aria-label="Cover directions">
+  <a href="/">Guide</a>
+  {items.map(([n, l]) => <a href={`/lab/${n}`} aria-current={current === +n ? 'page' : undefined}>{l}</a>)}
+</nav>
+<style>
+  .lab-switch { position: fixed; z-index: 99; bottom: 14px; left: 50%; translate: -50% 0; display: flex; background: #fff; font: 600 12px/1 system-ui, sans-serif; box-shadow: 0 6px 30px #0009; }
+  a { color: #111; text-decoration: none; padding: 11px 13px; }
+  a:hover { background: #ddd; }
+  a[aria-current] { background: #111; color: #fff; }
+  a:focus-visible { outline: 3px solid #08f; outline-offset: -3px; }
+</style>

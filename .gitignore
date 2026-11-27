@@ -1,0 +1,9 @@
+node_modules/
+.idea/
+.env
+.env.*
+.DS_Store
+
+NOTAS_PRIVADAS.md
+ESTADO.md
+PENDIENTE.md

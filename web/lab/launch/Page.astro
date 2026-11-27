@@ -1,0 +1,120 @@
+---
+import '@fontsource-variable/anybody/standard.css';
+import '@fontsource-variable/martian-mono/standard.css';
+import { PALETTES } from '../src/lab/palettes';
+import mark from './mark.svg?raw';
+
+const { title, description, index = true } = Astro.props as { title: string; description: string; index?: boolean };
+const pal = PALETTES.find((p) => p.id === 'gnoland')!;
+const vars = ['void', 'ink', 'ash', 'blue'].map((k) => `--${k}:${pal.css[k]}`).join(';');
+const abs = (p: string) => Astro.site && new URL(p, Astro.site).href;
+---
+<!doctype html>
+<html lang="en" style={vars}>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>{title}</title>
+  <meta name="description" content={description} />
+  <meta name="theme-color" content="#090909" />
+  {!index && <meta name="robots" content="noindex" />}
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content={title} />
+  <meta property="og:description" content={description} />
+  <meta name="twitter:card" content="summary_large_image" />
+  {Astro.site && <link rel="canonical" href={abs('/')} />}
+  {Astro.site && <meta property="og:url" content={abs('/')} />}
+  {Astro.site && <meta property="og:image" content={abs('/og.jpg')} />}
+</head>
+<body>
+  <canvas id="hole" aria-hidden="true"></canvas>
+  <div id="orbit" aria-hidden="true"></div>
+  <header><a class="mark" href="/"><span class="logo" aria-hidden="true" set:html={mark} />DexVision</a><a class="out" href="https://gno.land">gno.land</a></header>
+  <main><slot /></main>
+  <noscript><style>#hole { opacity: 1 !important; background: radial-gradient(circle at 72% 40%, #000 0 14%, #f0f0f0 14.4%, #49afeb 18%, #02273b 28%, transparent 46%); }</style></noscript>
+
+  <script>
+    import { project, type Scene } from '../src/lab/horizon';
+    import { horizonLite } from '../src/lab/horizon-lite';
+    import { PALETTES } from '../src/lab/palettes';
+
+    const h1 = document.querySelector('h1')!, letters: HTMLElement[] = [];
+    h1.setAttribute('aria-label', [...h1.children].map((x) => x.textContent).join(' '));
+    for (const w of h1.children) {
+      const s = w.textContent!; w.textContent = ''; w.setAttribute('aria-hidden', 'true');
+      for (const c of s) { const i = document.createElement('i'); i.textContent = c; w.append(i); letters.push(i); }
+    }
+
+    const scene: Scene = { incl: 0.16, roll: 0.26, zoom: 1, dim: 1, off: [0, 0], t: 8, light: PALETTES.find((p) => p.id === 'gnoland')!.light };
+    const narrow = () => innerWidth < 820 || innerWidth < innerHeight;
+    const place = () => {
+      if (narrow()) { scene.zoom = Math.min(0.95, (innerWidth / innerHeight) * 1.75); scene.off = [0, 0.16]; }
+      else { scene.zoom = 1.28 * Math.min(1, (innerWidth * 0.62) / innerHeight); scene.off = [(innerWidth / innerHeight) * 0.2, 0.06]; }
+    };
+    place();
+
+    /* headline: letters widen with their closeness to the hole and thicken under the pointer */
+    let homes: { x: number; y: number }[] = [], stale = true;
+    const mouse = { x: -9999, y: -9999 };
+    const measure = () => {
+      letters.forEach((l) => { l.style.fontVariationSettings = ''; l.dataset.v = ''; });
+      homes = letters.map((l) => { const r = l.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; }); stale = true;
+    };
+    addEventListener('pointermove', (e) => { mouse.x = e.clientX; mouse.y = e.clientY; stale = true; }, { passive: true });
+    addEventListener('resize', () => { place(); measure(); });
+    function bend(hx: number, hy: number) {
+      stale = false;
+      letters.forEach((l, i) => {
+        const h = homes[i]; if (!h) return;
+        const d = Math.hypot(h.x - hx, (h.y - hy) * 0.8) / (narrow() ? innerHeight * 0.95 : innerWidth), m = Math.exp(-((Math.hypot(h.x - mouse.x, h.y - mouse.y) / 170) ** 2));
+        const pull = Math.max(0, Math.min(1, (0.66 - d) / 0.34));
+        const v = `'wdth' ${Math.round((52 + pull * 98 - m * 34) / 3) * 3}, 'wght' ${Math.round((880 - pull * 420 + m * 300) / 12) * 12}`;
+        if (l.dataset.v !== v) { l.dataset.v = v; l.style.fontVariationSettings = v; }
+      });
+    }
+
+    const orbit = document.getElementById('orbit')!;
+    const bodies = ['Prices', 'Pairs', 'Liquidity', 'Volume', 'Source'].map((s, i) => {
+      const el = document.createElement('span'); el.textContent = s; orbit.append(el);
+      return { el, r: 3.7 + i * 0.95, a: i * 2.4 + 3.6 };
+    });
+
+    horizonLite(document.getElementById('hole') as HTMLCanvasElement, scene, (dt) => {
+      const hx = innerWidth / 2 + scene.off[0] * innerHeight, hy = innerHeight / 2 - scene.off[1] * innerHeight, slim = narrow();
+      for (const b of bodies) {
+        b.a += dt * 1.1 / Math.pow(b.r, 1.5);
+        const p = project(scene, Math.cos(b.a) * b.r, Math.sin(b.a) * b.r), behind = Math.sin(b.a) > 0.2;
+        const off = (behind && Math.hypot(p.x - hx, p.y - hy) < innerHeight * 0.21 * scene.zoom) || (!slim && p.x < innerWidth * 0.46) || p.x > innerWidth - 100 || p.x < 10;
+        b.el.style.transform = `translate(${p.x.toFixed(1)}px,${p.y.toFixed(1)}px) scale(${Math.min(1.15, 15 / p.depth).toFixed(3)})`;
+        b.el.style.opacity = off ? '0' : behind ? '.55' : '1';
+      }
+      if (stale) bend(hx, hy);
+    });
+    document.fonts.load('900 40px "Anybody Variable"', h1.getAttribute('aria-label')!).then(() => { measure(); dispatchEvent(new Event('horizon:redraw')); });
+  </script>
+</body>
+</html>
+<style is:global>
+  /* Layout: one screen. The hole is the only light; the headline bends toward it. */
+  :root { --display: 'Anybody Variable', 'Arial Black', sans-serif; --data: 'Martian Mono Variable', ui-monospace, monospace; color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--void); color: var(--ink); font: 400 14px/1.6 var(--data); font-stretch: 85%; display: flex; flex-direction: column; min-height: 100svh; overflow-x: hidden; }
+  a { color: inherit; } :focus-visible { outline: 2px solid var(--blue); outline-offset: 4px; }
+  #hole, #orbit { position: fixed; inset: 0; width: 100%; height: 100%; } #orbit { overflow: hidden; pointer-events: none; }
+  #hole[data-failed] { background: radial-gradient(circle at 72% 42%, #000 0 14%, #f0f0f0 14.4%, #49afeb 18%, #02273b 28%, transparent 46%); }
+  #orbit span { position: absolute; left: 0; top: 0; transform-origin: 0 0; margin: -13px 0 0 -6px; padding: 3px 9px 3px 19px; font-size: 12px; background: color-mix(in srgb, var(--void) 88%, transparent); transition: opacity .4s; will-change: transform; white-space: nowrap; }
+  #orbit span::before { content: ''; position: absolute; left: 6px; top: 50%; width: 7px; height: 7px; margin-top: -3.5px; border-radius: 50%; background: var(--blue); }
+  header { position: relative; display: flex; justify-content: space-between; align-items: center; padding: max(24px, env(safe-area-inset-top)) max(20px, 4vw); }
+  .mark { font: 800 24px/1 var(--display); font-variation-settings: 'wdth' 150; text-decoration: none; display: flex; align-items: center; gap: 10px; } .logo { width: 42px; height: 42px; margin-block: -10px; } .logo svg { display: block; width: 100%; height: 100%; } .out { color: #bdbdbd; text-underline-offset: 4px; } .out:hover { color: var(--blue); }
+  main { position: relative; flex: 1; display: flex; flex-direction: column; justify-content: center; padding: 0 max(20px, 4vw) max(7vh, 34px); pointer-events: none; } main a { pointer-events: auto; }
+  h1 { margin: 0; font: 900 clamp(70px, min(13.2vw, 30vh), 270px)/.92 var(--display); letter-spacing: -.015em; display: flex; flex-direction: column; }
+  h1 span { white-space: nowrap; } h1 i { font-style: normal; display: inline-block; } h1 span:last-child { color: var(--blue); }
+  .lede { max-width: 40ch; margin: 34px 0 0; font-size: clamp(15px, 1.25vw, 19px); text-shadow: 0 0 14px #000, 0 0 4px #000; } .lede b { color: var(--blue); font-weight: 500; }
+  @media (max-width: 819px), (max-aspect-ratio: 1/1) { main { justify-content: flex-end; } h1 { font-size: min(15.5vw, 150px); } .lede { margin-top: 22px; } }
+  @media (max-width: 430px) { .mark { font-size: 18px; gap: 8px; } .logo { width: 34px; height: 34px; } .out { font-size: 12px; } }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>

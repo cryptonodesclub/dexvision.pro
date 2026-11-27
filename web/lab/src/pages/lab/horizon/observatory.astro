@@ -1,0 +1,110 @@
+---
+import '@fontsource-variable/anybody/standard.css';
+import '@fontsource-variable/martian-mono/standard.css';
+import '../../../lab/hz.css';
+import Head from '../../../lab/HzHead.astro';
+import Market from '../../../lab/HzMarket.astro';
+import Switch from '../../../lab/HzSwitch.astro';
+---
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <title>DexVision Horizon Observatory</title>
+</head>
+<body>
+  <div class="app" id="top">
+    <section class="stage" id="stage" aria-live="off">
+      <canvas id="hole" aria-hidden="true"></canvas>
+      <div class="who"><h1 id="sym"></h1><p id="name"></p></div>
+      <div class="px"><p id="px"></p><p id="chg"></p></div>
+      <dl class="read" id="read"></dl>
+      <p class="src"><a id="realm" href="#top"></a></p>
+    </section>
+    <section class="desk">
+      <Head />
+      <dl class="chain" id="chain"></dl>
+      <div class="market"><Market makers={false} /></div>
+      <p class="hint"><kbd>↑</kbd><kbd>↓</kbd> to point the telescope</p>
+    </section>
+  </div>
+  <Switch current="observatory" />
+  <script>
+    import { horizon, type Scene } from '../../../lab/horizon';
+    import { market, tone } from '../../../lab/hz';
+    import { tokens, price, usd, num, pct, age, calm, type Token } from '../../../lab/market';
+    const $ = (id: string) => document.getElementById(id)!;
+
+    const scene: Scene = { incl: 0.2, roll: 0.2, zoom: 1, dim: 1, off: [0, 0.02], t: 8, jitter: 1, tint: 0, glow: 1, speed: 1, outer: 9.6, box: $('stage') };
+    const goal = { incl: 0.2, roll: 0.2, zoom: 1, tint: 0, glow: 1, speed: 1, outer: 9.6 };
+    const norm = (v: number, lo: number, hi: number) => Math.max(0, Math.min(1, (Math.log(v) - Math.log(lo)) / (Math.log(hi) - Math.log(lo))));
+
+    let list: Token[] = [], cur: Token = tokens[0];
+    /* every physical property of the hole is one market figure */
+    function aim() {
+      const t = cur, c = t.ch[m.state.win], st = $('stage'), fit = Math.min(1, st.clientWidth / st.clientHeight / 0.86);
+      goal.zoom = (0.62 + norm(t.mcap, 2e4, 8e7) * 0.72) * fit;
+      goal.glow = 0.4 + norm(t.vol, 5e4, 2e6) * 0.95;
+      goal.outer = 6 + norm(t.liq, 4e4, 4.2e6) * 5;
+      goal.speed = 0.45 + norm(t.tx, 300, 25000) * 2.2;
+      goal.tint = Math.max(-1, Math.min(1, Math.sign(c) * Math.log1p(Math.abs(c)) / 4));
+      goal.incl = 0.1 + norm(t.age, 4, 1800) * 0.42;
+      goal.roll = ((t.sym.charCodeAt(0) * 37 + t.sym.length * 53) % 70) / 100 - 0.35;
+    }
+    function caption(full: boolean) {
+      const t = cur, c = t.ch[m.state.win];
+      if (full) {
+        $('sym').innerHTML = [...t.sym].map((x) => `<i>${x}</i>`).join(''); $('sym').style.setProperty('--n', String(Math.max(4, t.sym.length)));
+        $('name').textContent = `${t.name}, against ${t.quote}`; $('realm').textContent = t.realm; ($('realm') as HTMLAnchorElement).href = 'https://' + t.realm;
+      }
+      $('px').textContent = price(t.price); $('chg').textContent = pct(c); $('chg').className = tone(c);
+      $('read').innerHTML = [['Size', 'Market cap', usd(t.mcap)], ['Brightness', 'Volume', usd(t.vol)], ['Reach', 'Liquidity', usd(t.liq)], ['Spin', 'Transactions', num(t.tx)], ['Tilt', 'Age', age(t.age)], ['Color', 'Change', pct(c)]]
+        .map(([k, n, v]) => `<div><dt>${k}<span>${n}</span></dt><dd>${v}</dd></div>`).join('');
+    }
+    function select(t: Token, focus = false) {
+      const same = t === cur; cur = t;
+      document.querySelectorAll<HTMLElement>('#rows tr').forEach((r) => { const on = r.dataset.sym === t.sym; r.setAttribute('aria-selected', String(on)); r.tabIndex = on ? 0 : -1; if (on && focus) { r.focus({ preventScroll: true }); r.scrollIntoView({ block: 'nearest' }); } });
+      aim(); caption(!same || !$('sym').childElementCount);
+      if (calm()) { Object.assign(scene, goal); dispatchEvent(new Event('horizon:redraw')); }
+    }
+    const m = market({ makers: false, realm: false, rowAttrs: () => 'role="row" tabindex="-1"',
+      onList: (l) => { list = l; if (l.length) select(l.includes(cur) ? cur : l[0]); },
+      onTick: (c) => { if (c.includes(cur)) { aim(); caption(false); } } });
+    cur = tokens[2]; m.start();
+    $('rows').addEventListener('click', (e) => { const r = (e.target as Element).closest<HTMLElement>('tr'); const t = list.find((x) => x.sym === r?.dataset.sym); if (t) select(t, true); });
+    document.addEventListener('keydown', (e) => {
+      if (!['ArrowDown', 'ArrowUp'].includes(e.key) || !list.length || (e.target as Element).matches('input')) return;
+      e.preventDefault(); const i = list.indexOf(cur); select(list[Math.max(0, Math.min(list.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))], true);
+    });
+    addEventListener('resize', aim); aim(); Object.assign(scene, goal);
+    const mouse = { x: 0, y: 0 }; $('stage').addEventListener('pointermove', (e) => { const r = $('stage').getBoundingClientRect(); mouse.x = (e.clientX - r.left) / r.width - 0.5; mouse.y = (e.clientY - r.top) / r.height - 0.5; });
+    horizon($('hole') as HTMLCanvasElement, scene, (dt) => {
+      const k = 1 - Math.exp(-dt * 2.6);
+      for (const p of Object.keys(goal) as (keyof typeof goal)[]) { const to = goal[p] + (p === 'incl' ? mouse.y * 0.14 : p === 'roll' ? mouse.x * 0.12 : 0); (scene[p] as number) += (to - (scene[p] as number)) * k; }
+    });
+  </script>
+</body>
+</html>
+<style is:global>
+  /* Layout: telescope on the left, instrument desk on the right. Each pair is its own hole. */
+  .app { display: grid; grid-template-columns: minmax(380px, 39vw) minmax(0, 1fr); min-height: 100vh; }
+  .stage { position: sticky; top: 0; height: 100vh; overflow: hidden; background: #000; container-type: inline-size; }
+  #hole { position: absolute; inset: 0; width: 100%; height: 100%; }
+  #hole[data-failed] { background: radial-gradient(circle at 50% 48%, #000 0 20%, #ffd9a8 20.4%, #ff7a24 26%, #4a0d04 38%, transparent 56%); }
+  .stage::after { content: ''; position: absolute; inset: 0; background: linear-gradient(#070405d9, #07040500 24%, #07040500 62%, #070405e6 80%); pointer-events: none; }
+  .who, .px, .read, .src { position: absolute; z-index: 2; left: 26px; right: 26px; margin: 0; }
+  .who { top: 20px; } h1 { margin: 0; font: 900 min(calc(128cqw / var(--n, 4)), 150px)/.86 var(--display); font-variation-settings: 'wdth' 100; display: flex; justify-content: space-between; }
+  h1 i { font-style: normal; animation: arrive .7s cubic-bezier(.1, .9, .2, 1); } @keyframes arrive { from { font-variation-settings: 'wdth' 50, 'wght' 100; } }
+  #name { margin: 12px 0 0; font-size: 14px; text-shadow: 0 0 8px #000; }
+  .px { bottom: 178px; display: flex; align-items: baseline; justify-content: space-between; gap: 16px; font-variant-numeric: tabular-nums; } .px p { margin: 0; font: 700 clamp(26px, 3vw, 46px)/1 var(--display); font-variation-settings: 'wdth' 80; text-shadow: 0 0 14px #000, 0 0 4px #000; }
+  .read { bottom: 66px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px 18px; font-variant-numeric: tabular-nums; } .read dt { font-size: 11px; color: var(--ember); } .read dt span { color: var(--ash); margin-left: 7px; } .read dd { margin: 0; font-size: 16px; font-weight: 500; }
+  .src { bottom: 22px; font-size: 12px; color: var(--ash); } .src a:hover { color: var(--ink); }
+  .desk { min-width: 0; padding-bottom: 80px; } .desk .top { padding: 20px 26px 14px; gap: 22px; } .desk .chain { padding: 0 26px 20px; }
+  .market { padding: 0 26px; } .market th, .market td { padding: 8px 9px; } .market th:first-child { padding-left: 10px; } .market td:last-child, .market th:last-child { padding-right: 8px; } .market .p, .market .c { font-size: 14px; } .spec { width: 112px; height: 22px; } .market .pair b { font-size: 17px; }
+  #rows tr { cursor: pointer; } #rows tr[aria-selected='true'] { background: linear-gradient(90deg, #ff7a24, #ff7a2433 46%, #ff7a2400); } #rows tr[aria-selected='true'] th b, #rows tr[aria-selected='true'] th s, #rows tr[aria-selected='true'] th em { color: #140700; } #rows tr:focus-visible { outline-offset: -2px; }
+  .hint { margin: 14px 26px; color: var(--ash); font-size: 12px; } .hint kbd { position: static; border: 1px solid var(--rule); padding: 1px 6px; margin-right: 4px; }
+  @media (max-width: 1500px) { .market th:nth-child(6), .market td:nth-child(6), .market th:nth-child(8), .market td:nth-child(8) { display: none; } }
+  @media (max-width: 1000px) { .app { display: flex; flex-direction: column; } .desk { display: contents; } .desk .top { order: -1; background: #000; } .stage { position: relative; height: 620px; } .market { padding-bottom: 80px; } .hint { display: none; } }
+</style>

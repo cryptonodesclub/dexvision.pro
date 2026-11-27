@@ -1,0 +1,13 @@
+---
+import mark from '../design/mark.svg?raw';
+/** The list filters as you type; other pages send the search there. */
+const { filter = false } = Astro.props as { filter?: boolean };
+---
+<header>
+  <a class="mark" href="/"><span class="logo" aria-hidden="true" set:html={mark} />DexVision</a>
+  <form class="search" role="search" action="/" data-filter={filter ? '' : undefined}><label class="vh" for="q">Search tokens</label><input id="q" name="q" type="search" placeholder="Token or realm path" autocomplete="off" spellcheck="false" /><kbd>/</kbd></form>
+  <p class="block usd" id="usd"><b>GNOT</b> <span id="usd-price">–</span></p>
+  <div class="nets" role="group" aria-label="Network"><button type="button" data-net="mainnet" aria-pressed="false" title="gnoland-1">Mainnet</button><button type="button" data-net="onyx" aria-pressed="false" title="onyx-1">Testnet</button></div>
+  <p class="block"><b id="chain"></b> block <span id="height">0</span></p>
+  <div class="wallet"><button type="button" id="w-main">Connect wallet</button><button type="button" id="w-off" aria-label="Disconnect wallet" title="Disconnect" hidden>×</button><p id="w-note" role="status" hidden></p></div>
+</header>

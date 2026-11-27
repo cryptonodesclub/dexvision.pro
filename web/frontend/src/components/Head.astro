@@ -1,0 +1,27 @@
+---
+import '@fontsource-variable/anybody/standard.css';
+import '@fontsource-variable/martian-mono/standard.css';
+import '../styles/horizon.css';
+/** `canonical`: only for a page with one address. The token page serves many, so it names none. */
+const { title, description, canonical, share = title } = Astro.props as { title: string; description: string; canonical?: string; share?: string };
+const abs = (p: string) => new URL(p, Astro.site).href;
+---
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>{title}</title>
+<meta name="description" content={description} />
+<meta name="theme-color" content="#090909" />
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="DexVision" />
+<meta property="og:title" content={share} />
+<meta property="og:description" content={description} />
+<meta property="og:image" content={abs('/og.jpg')} />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="DexVision: Watch price bend. Live token prices, charts and trading on gno.land" />
+<meta name="twitter:card" content="summary_large_image" />
+{canonical && <link rel="canonical" href={abs(canonical)} />}
+{canonical && <meta property="og:url" content={abs(canonical)} />}

@@ -1,0 +1,33 @@
+---
+import { readFileSync } from 'node:fs';
+const load = (n: string) => 'data:image/svg+xml,' + encodeURIComponent(readFileSync(`src/lab/icons/${n}.svg`, 'utf8'));
+const icons = [
+  ['planet-storm', 'Tormenta (elegido)', 'El planeta es la cara y su gran tormenta, el ojo.'],
+  ['planet-storm-small', 'Tormenta, tamaño pequeño', 'Sin franja de nubes y con el ojo mayor, para la pestaña.'],
+  ['hole-hat', 'Singularidad con gorro', 'El agujero de la portada, con su gorro.'],
+  ['hole-gnome', 'Gnomo singular', 'El disco es el ala del gorro y el anillo de luz, la barba.'],
+  ['planet-ring', 'Planeta', 'Planeta con anillo, pupila y gorro.'],
+  ['planet-iris', 'Iris', 'La Mirada, con un planeta de franjas como iris.'],
+  ['planet-eye', 'Anillo', 'Sin gorro: el anillo del planeta es el párpado.'],
+  ['v', 'V', 'Gorro, nariz y barba en forma de V de Vision.'],
+  ['eye', 'Mirada', 'El gorro sobre un ojo con iris azul.'],
+  ['bars', 'Barras', 'La barba son barras de volumen.'],
+].map(([id, name, why]) => ({ name, why, src: load(id) }));
+---
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>Iconos DexVision</title></head>
+<body>
+  {icons.map((i) => (
+    <section>
+      <img src={i.src} width="220" height="220" alt="" />
+      <div><h2>{i.name}</h2><p>{i.why}</p>
+        <div class="row">{[180, 48, 32, 16].map((s) => <img src={i.src} width={s} height={s} alt="" />)}</div>
+        <div class="tabs"><span class="dk"><img src={i.src} width="16" height="16" alt="" />DexVision</span><span class="lt"><img src={i.src} width="16" height="16" alt="" />DexVision</span></div></div>
+    </section>
+  ))}
+</body></html>
+<style>
+  body { margin: 0; background: #1f1f1f; color: #f0f0f0; font: 15px/1.5 system-ui, sans-serif; }
+  section { display: flex; flex-wrap: wrap; gap: 40px; padding: 30px 40px; border-bottom: 1px solid #585858; align-items: center; } h2 { margin: 0; font-size: 26px; } p { margin: 0 0 14px; color: #bdbdbd; }
+  .row { display: flex; gap: 24px; align-items: end; } .row img:first-child { width: 96px; height: 96px; } .tabs { display: flex; margin-top: 16px; } .tabs span { display: flex; gap: 8px; align-items: center; padding: 9px 60px 9px 12px; font-size: 13px; } .dk { background: #35363a; } .lt { background: #fff; color: #222; }
+</style>

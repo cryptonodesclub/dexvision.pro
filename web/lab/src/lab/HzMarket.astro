@@ -1,0 +1,21 @@
+---
+import { TABS, WINDOWS } from './market';
+const { makers = true } = Astro.props as { makers?: boolean };
+---
+<div class="bar">
+  <div class="tabs" role="group" aria-label="View">{TABS.map((t, i) => <button data-tab={t.id} aria-pressed={i === 0 ? 'true' : 'false'}>{t.label}</button>)}</div>
+  <div class="wins" role="group" aria-label="Time window">{WINDOWS.map((w) => <button data-win={w.id} aria-pressed={w.id === 'h24' ? 'true' : 'false'}>{w.label}</button>)}</div>
+</div>
+<div class="scroll">
+  <table>
+    <thead><tr><th class="l">Pair</th><th>Price</th><th class="l sp">Shift</th><th>Change</th><th>Volume</th><th>Liquidity</th><th>Market cap</th><th>Txns</th>{makers && <th>Makers</th>}<th>Age</th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+  <p id="empty" hidden>No pair matches that search. Try a ticker or a path such as gno.land/r/demo.</p>
+</div>
+<p class="note">Simulated figures for design review.</p>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <linearGradient id="band"><stop stop-color="#5fb0ff" stop-opacity=".34"/><stop offset=".45" stop-color="#ffe9d0" stop-opacity=".12"/><stop offset=".7" stop-color="#ff7a24" stop-opacity=".22"/><stop offset="1" stop-color="#ff2a1c" stop-opacity=".36"/></linearGradient>
+  <linearGradient id="sb"><stop stop-color="#6fb7ff" stop-opacity=".85"/><stop offset="1" stop-color="#6fb7ff" stop-opacity="0"/></linearGradient>
+  <linearGradient id="sr"><stop stop-color="#ff4a33" stop-opacity="0"/><stop offset="1" stop-color="#ff4a33" stop-opacity=".85"/></linearGradient>
+</defs></svg>

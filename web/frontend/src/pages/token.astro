@@ -1,0 +1,216 @@
+---
+import Head from '../components/Head.astro';
+import Header from '../components/Header.astro';
+import Units from '../components/Units.astro';
+import Spectra from '../components/Spectra.astro';
+const wins = [['3600000', '1H'], ['21600000', '6H'], ['86400000', '24H'], ['604800000', '7D']];
+const facts = [['vol', '24h volume'], ['tr', '24h trades'], ['dep', 'Depth'], ['cap', 'Market cap'], ['sup', 'Supply'], ['acc', 'Accounts'], ['age', 'Age'], ['dec', 'Decimals']];
+---
+<!doctype html>
+<html lang="en">
+<head><Head title="Token, DexVision" share="DexVision, live token prices on gno.land" description="Live price, markets, trades and source code of a gno.land token." /></head>
+<body>
+  <canvas id="hole" aria-hidden="true"></canvas>
+  <Header />
+  <main id="top">
+    <section class="hero tok">
+      <p class="back"><a href="/">All tokens</a></p>
+      <h1></h1>
+      <div class="now"><p class="px"><span id="px">–</span> <small class="unit">GNOT</small></p><p id="chg" class="c flat">–</p><span id="spec"></span>
+        <div class="right"><Units /><div class="wins" role="group" aria-label="Time window">{wins.map(([ms, l]) => <button data-win={ms} aria-pressed={l === '24H' ? 'true' : 'false'}>{l}</button>)}</div></div></div>
+    </section>
+
+    <div class="market" id="page">
+      <dl class="facts lead">{facts.map(([id, l]) => <div><dt id={`k-${id}`}>{l}</dt><dd id={`f-${id}`}>–</dd></div>)}</dl>
+
+      <div class="desk">
+        <section class="slot chart" id="chart" aria-label="Price chart">
+          <div class="cap"><b id="chart-pair">–</b><span><span id="chart-venue"></span> <span id="chart-unit"></span></span>
+            <div class="frames" role="group" aria-label="Candle length">{['1m', '3m', '5m', '15m', '1h', '4h', '1d'].map((f) => <button data-frame={f} aria-pressed={f === '4h' ? 'true' : 'false'}>{f}</button>)}</div></div>
+          <div class="tools">
+            <div role="group" aria-label="Price scale">{[['linear', 'Linear'], ['log', 'Log'], ['percent', '%']].map(([id, l]) => <button data-scale={id} aria-pressed={id === 'linear' ? 'true' : 'false'}>{l}</button>)}</div>
+            <div role="group" aria-label="Layers">{[['volume', 'Volume'], ['ema', 'EMA 20'], ['trades', 'Trades'], ['mine', 'Yours']].map(([id, l]) => <button data-tool={id} aria-pressed="true" hidden={id === 'mine'}>{l}</button>)}</div>
+          </div>
+          <div class="pane"><p class="ohlc" id="ohlc"></p><div class="plot" id="plot"></div></div>
+          <div class="says"><p id="chart-says">Reading trades from the chain</p><button id="chart-retry" class="plain" hidden>Try again</button></div>
+          <p class="part" id="chart-part" hidden>Only the latest trades could be read, so the start may be missing.</p>
+        </section>
+        <section class="slot trade" id="trade" aria-label="Trade">
+          <div class="cap"><b id="trade-pair">–</b><span id="trade-venue"></span></div>
+          <dl><div><dt>Price here</dt><dd id="trade-price">–</dd></div><div><dt>Depth here</dt><dd id="trade-depth">–</dd></div></dl>
+          <p class="soon" id="trade-soon">Reading the market</p>
+          <form class="t" id="t-form" hidden autocomplete="off">
+            <div class="sides" role="group" aria-label="Side"><button type="button" data-side="buy" aria-pressed="true">Buy</button><button type="button" data-side="sell" aria-pressed="false">Sell</button></div>
+            <div class="amt"><label for="t-in">You pay</label><span class="bal"><span id="t-bal"></span> <button type="button" id="t-max" class="plain" hidden>Max</button></span><input id="t-in" inputmode="decimal" placeholder="0" maxlength="30" /><b id="t-pay">–</b></div>
+            <div class="amt out"><span>You receive about</span><output id="t-out" for="t-in">0</output><b id="t-get">–</b></div>
+            <p class="tip" id="t-lock" hidden></p>
+            <p class="tip" id="t-held" hidden><span id="t-held-text"></span> <button type="button" id="t-convert" class="plain small">Convert to GNOT</button></p>
+            <label class="native" id="t-native-row" hidden><input type="checkbox" id="t-native" checked /><span>Receive GNOT</span></label>
+            <p class="tip" id="t-credit" hidden><span id="t-credit-text"></span> <button type="button" id="t-claim" class="plain small">Claim it</button></p>
+            <p class="tip" id="t-wrap" hidden></p>
+            <div class="slip" role="group" aria-label="Slippage limit"><span>Slippage limit</span>{[[50, '0.5%'], [100, '1%'], [300, '3%']].map(([b, l]) => <button type="button" data-slip={b} aria-pressed={b === 100 ? 'true' : 'false'}>{l}</button>)}</div>
+            <dl class="costs">
+              <div><dt>At least</dt><dd id="t-min">–</dd></div>
+              <div><dt>Cost against price, market fees included</dt><dd id="t-loss">–</dd></div>
+              <div><dt>Network fee</dt><dd id="t-net">–</dd></div>
+              <div><dt>Storage deposit, held by the chain</dt><dd id="t-dep">–</dd></div>
+            </dl>
+            <label class="consent" id="t-consent" hidden><input type="checkbox" id="t-agree" /><span id="t-consent-text"></span></label>
+            <button class="go" id="t-go" type="submit" disabled>Connect Adena</button>
+            <p class="msg" id="t-msg" role="status"></p>
+            <p class="tip" id="t-keep" hidden></p>
+            <p class="tip" id="t-install" hidden><a href="https://www.adena.app/">Adena</a> is the wallet that signs trades. Install it and reload.</p>
+            <p class="tip addr2" id="t-addr"></p>
+          </form>
+        </section>
+      </div>
+
+
+      <section class="block2" id="about" hidden><h2>About <small>verified on-chain</small></h2>
+        <div id="p-body" class="about" hidden>
+          <img id="p-logo" alt="" width="72" height="72" loading="lazy" referrerpolicy="no-referrer" hidden />
+          <div><p id="p-desc" class="p-desc"></p><ul id="p-links" class="p-links"></ul><p id="p-who" class="tip2"></p></div>
+        </div>
+        <p id="p-none" class="tip2">No profile yet. The team behind this token can publish its description and official links on-chain, and every app that reads the registry shows the same ones.</p>
+        <p class="h-ask"><button type="button" id="p-edit" class="ask" hidden>Add profile</button><span id="p-hint" role="status"></span><a id="p-registry" class="plain small" href="#">See it in the registry</a></p>
+        <form id="p-form" class="p-form" hidden autocomplete="off" novalidate>
+          <label class="wide">Description <small id="p-count"></small><textarea name="description" rows="3" maxlength="400" placeholder="What this token is for, in one paragraph"></textarea><em data-err="description"></em></label>
+          <label>Website<input name="website" inputmode="url" placeholder="https://…" maxlength="200" /><em data-err="website"></em></label>
+          <label>Logo image<input name="logo" inputmode="url" placeholder="https://…/logo.png" maxlength="200" /><em data-err="logo"></em></label>
+          <label>X<input name="x" placeholder="handle" maxlength="16" /><em data-err="x"></em></label>
+          <label>Telegram<input name="telegram" placeholder="handle" maxlength="33" /><em data-err="telegram"></em></label>
+          <label>Discord<input name="discord" inputmode="url" placeholder="https://discord.gg/…" maxlength="200" /><em data-err="discord"></em></label>
+          <label>GitHub<input name="github" placeholder="owner or owner/repo" maxlength="140" /><em data-err="github"></em></label>
+          <p class="wide p-act"><button type="submit" id="p-go" class="go">Publish with Adena</button><button type="button" id="p-cancel" class="plain">Cancel</button></p>
+          <p class="wide tip">Empty fields are cleared. Publishing costs a small network fee and a storage deposit the chain holds while the profile exists.</p>
+        </form>
+        <p class="msg" id="p-msg" role="status"></p>
+      </section>
+
+      <section class="block2"><h2>Markets</h2>
+        <div class="scroll"><table><thead><tr><th class="l" data-sort="pair" data-first="asc">Pair</th><th class="l" data-sort="market" data-first="asc">Market</th><th data-sort="fee">Fee</th><th data-sort="price">Price <span class="unit">GNOT</span></th><th data-sort="gap">Against price</th><th data-sort="depth">Depth <span class="unit">GNOT</span></th><th data-sort="volume">Volume <span class="unit">GNOT</span></th><th data-sort="trades">Trades</th></tr></thead><tbody id="markets"><tr class="wait"><td colspan="8">Reading the chain</td></tr></tbody></table></div>
+      </section>
+
+      <section class="block2 tabbed">
+        <div class="tabrow" role="tablist" aria-label="Trades and holders"><button type="button" role="tab" id="tab-trades" aria-controls="panel-trades" aria-selected="true">Trades</button><button type="button" role="tab" id="tab-holders" aria-controls="holders" aria-selected="false" tabindex="-1">Holders</button><small id="trades-of"></small></div>
+        <div role="tabpanel" id="panel-trades" aria-labelledby="tab-trades">
+        <div class="scroll"><table><thead><tr><th class="l" data-sort="time">Time</th><th class="l" data-sort="side" data-first="asc">Side</th><th data-sort="amount">Amount <span class="sym" id="amt-of"></span></th><th data-sort="price">Price after <span class="unit">GNOT</span></th><th data-sort="value">Value <span class="unit">GNOT</span></th><th data-sort="block">Block</th></tr></thead><tbody id="trades"></tbody></table></div>
+        <p class="none" id="no-trades">Reading trades</p><button id="more" class="plain" hidden></button>
+        </div>
+        <div role="tabpanel" id="holders" aria-labelledby="tab-holders" hidden>
+        <p class="h-ask"><button type="button" id="h-go" class="ask">Analyze holders</button><span id="h-says" role="status">Adds up every transfer since the chain began. The first time can take several seconds.</span></p>
+        <div id="h-bar" class="h-bar" hidden></div>
+        <div id="h-out" hidden>
+          <dl class="facts"><div><dt>Holders</dt><dd id="h-count">–</dd></div><div><dt>Ten largest, without contracts</dt><dd id="h-top">–</dd></div><div><dt>Held by contracts</dt><dd id="h-con">–</dd></div><div><dt>With less than 0.001%</dt><dd id="h-dust">–</dd></div></dl>
+          <figure class="sky"><canvas id="h-sky" role="img" aria-label="Map of the largest holders. The table below lists the same accounts."></canvas>
+            <figcaption><span class="lg lw">Wallet</span><span class="lg lc">Contract</span><span class="lg lq">Never signed</span><span class="lg ls">Sent this token to each other</span><span id="h-drawn"></span></figcaption></figure>
+          <p class="tip2"><span id="h-group"></span> A link is a transfer, not proof of one owner. An account that never signed can be a multisig, an unused wallet, or a contract without a known name.</p>
+          <div class="scroll"><table class="htab"><thead><tr><th class="l" data-sort="rank" data-first="asc">#</th><th class="l" data-sort="holder" data-first="asc">Holder</th><th class="l" data-sort="type" data-first="asc">Type</th><th data-sort="share">Share</th><th data-sort="amount">Amount</th><th data-sort="value">Value <span class="unit">GNOT</span></th><th data-sort="links">Links</th></tr></thead><tbody id="h-rows"></tbody></table></div>
+          <button type="button" id="h-more" class="plain" hidden></button>
+        </div>
+        <div id="liquidity" hidden>
+          <h3>Who can withdraw the liquidity</h3>
+          <p class="h-ask"><span id="q-says" role="status"></span></p>
+          <div id="q-out" hidden>
+            <dl class="facts"><div><dt>Providers</dt><dd id="q-count">–</dd></div><div><dt>The largest provides</dt><dd id="q-one">–</dd></div><div><dt>The three largest</dt><dd id="q-three">–</dd></div><div><dt>Staked</dt><dd id="q-staked">–</dd></div><div><dt>In contracts</dt><dd id="q-con">–</dd></div></dl>
+            <div id="q-bar" class="q-bar" aria-hidden="true"></div>
+            <p class="tip2"><span>The owner of a position can withdraw it at any moment, staked or not: Gnoswap has no time lock.</span> If the owner is a contract, it depends on that contract. Depth is the other side of each pool, what a seller of this token can receive.<b id="q-unpriced" hidden> Pools against a token without a price are not counted in the depth.</b></p>
+            <div class="scroll"><table class="htab"><thead><tr><th class="l" data-sort="rank" data-first="asc">#</th><th class="l" data-sort="provider" data-first="asc">Provider</th><th class="l" data-sort="type" data-first="asc">Type</th><th data-sort="share">Share</th><th data-sort="depth">Depth <span class="unit">GNOT</span></th><th data-sort="amount">Amount <span class="sym" id="q-sym"></span></th><th data-sort="positions">Positions</th><th data-sort="staked">Staked</th></tr></thead><tbody id="q-rows"></tbody></table></div>
+            <button type="button" id="q-more" class="plain" hidden></button>
+          </div>
+        </div>
+        </div>
+      </section>
+
+
+      <section class="block2"><h2>Contract</h2>
+        <p class="addr"><a id="realm" href="#top"></a><button id="copy" class="plain">Copy address</button></p>
+        <details id="source"><summary>Read the source</summary><div class="src"><div id="files" role="group" aria-label="Source files"></div><pre id="code" tabindex="0"></pre></div></details>
+      </section>
+      <p class="state" id="state" role="status"></p>
+      <p class="credit">Past trades are kept on this device so they are read only once. <button id="forget" class="plain small">Clear them</button></p>
+      <p class="credit">Charts: TradingView Lightweight Charts™. Copyright © 2025 TradingView, Inc. <a href="https://www.tradingview.com/">tradingview.com</a></p>
+      <noscript><p class="note">DexVision reads the chain from your browser, so it needs JavaScript.</p></noscript>
+    </div>
+
+    <div class="market" id="stop" hidden><p class="lede" id="stop-why"></p><p class="choices" id="stop-list"></p><p><a href="/">See all tokens</a></p></div>
+  </main>
+  <Spectra />
+  <script>import '../app/token.ts';</script>
+</body>
+</html>
+
+<style is:global>
+  /* Layout: the symbol bends toward its own hole; below it, the chart leads and the trade panel stays at hand. */
+  .tok { padding-bottom: 26px; } .tok .back, .tok .wins { pointer-events: auto; } .back { margin: 0 0 10px; color: var(--ash); } .back a { text-underline-offset: 4px; } .back a:hover { color: var(--blue); }
+  .tok h1 { font-size: clamp(54px, min(calc(74vw / var(--n, 5)), 17vh), 210px); line-height: .92; }
+  .now { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 26px; margin-top: 18px; font-variant-numeric: tabular-nums; } .now p { margin: 0; text-shadow: 0 0 12px #000, 0 0 4px #000; } .px { font-size: clamp(26px, 2.6vw, 40px); font-weight: 600; line-height: 1.1; } .px small.unit { font-size: 15px; font-weight: 400; color: var(--blue); } .now .c { font-size: 22px; }
+  #chg.up::before { content: '▲ '; font-size: .7em; } #chg.down::before { content: '▼ '; font-size: .7em; } #spec svg { display: block; }
+  .now .right { margin-left: auto; display: flex; flex-wrap: wrap; gap: 8px; } .now .wins { background: color-mix(in srgb, var(--void) 82%, transparent); padding: 2px 14px; }
+  .desk { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 360px); gap: 18px; align-items: stretch; }
+  .slot { position: relative; display: flex; flex-direction: column; min-height: 500px; border: 1px solid var(--rule); background: var(--void); } .slot::before, .slot::after { content: ''; position: absolute; width: 22px; height: 22px; border: 2px solid var(--blue); pointer-events: none; } .slot::before { left: -1px; top: -1px; border-width: 2px 0 0 2px; } .slot::after { right: -1px; bottom: -1px; border-width: 0 2px 2px 0; }
+  .cap { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; padding: 14px 18px; border-bottom: 1px solid var(--rule); } .cap b { font: 800 18px/1.1 var(--display); font-variation-settings: 'wdth' 110; } .cap span { color: var(--ash); font-size: 12px; }
+  .soon { flex: 1; display: grid; place-items: center; margin: 0; padding: 24px; text-align: center; color: var(--ash); }
+  .chart .soon { background: repeating-linear-gradient(90deg, transparent 0 79px, var(--rule) 79px 80px), repeating-linear-gradient(0deg, transparent 0 59px, var(--rule) 59px 60px); }
+  .trade > dl { margin: 0; padding: 14px 18px; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; border-bottom: 1px solid var(--rule); font-variant-numeric: tabular-nums; } dt { color: var(--ash); font-size: 11px; } dd { margin: 0; font-size: 16px; font-weight: 500; overflow-wrap: anywhere; } .warn { margin: 0; padding: 12px 18px; background: #1f1f1f; }
+  .frames { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-left: auto; } .frames button { font: 500 13px/1 var(--data); padding: 4px 2px; } .frames button[aria-pressed='true'] { color: var(--blue); } .chart .cap { justify-content: flex-start; flex-wrap: wrap; }
+  .tools { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 20px; padding: 6px 18px; border-bottom: 1px solid var(--rule); } .tools div { display: flex; gap: 18px; } .tools button { font: 500 12px/1 var(--data); padding: 7px 0; } .tools [data-scale][aria-pressed='true'] { color: var(--blue); } .tools [data-tool]::before { content: ''; display: inline-block; width: 9px; height: 9px; margin-right: 7px; border: 1px solid currentColor; } .tools [data-tool][aria-pressed='true'] { color: var(--ink); } .tools [data-tool][aria-pressed='true']::before { background: var(--blue); border-color: var(--blue); } .tools button[hidden] { display: none; } .you { color: var(--ink); font-weight: 400; } .you::before { content: '◆ '; color: #fff; font-size: 10px; } .tools button:disabled { color: #585858; cursor: default; }
+  .pane { position: relative; flex: 1; display: flex; } .pane .plot { min-width: 0; }
+  .ohlc { position: absolute; z-index: 3; top: 10px; left: 18px; right: 90px; margin: 0; display: flex; flex-wrap: wrap; gap: 2px 14px; font-size: 11px; font-variant-numeric: tabular-nums; pointer-events: none; } .ohlc span { background: color-mix(in srgb, var(--void) 82%, transparent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--void) 82%, transparent); } .ohlc i { font-style: normal; color: var(--ash); margin-right: 5px; }
+  .plot { flex: 1; min-height: 360px; } .says { position: absolute; z-index: 2; inset: auto 0 34%; display: grid; justify-items: center; pointer-events: none; } .says p { margin: 0; padding: 6px 12px; background: var(--void); color: var(--ash); } .says p[hidden] { display: none; } .says button { pointer-events: auto; } .part { margin: 0; padding: 8px 18px; color: var(--ash); font-size: 11px; }
+  .t { display: flex; flex-direction: column; gap: 14px; padding: 16px 18px 20px; } .t[hidden], .soon[hidden] { display: none; }
+  .sides { display: grid; grid-template-columns: 1fr 1fr; background: #141414; } .sides button { padding: 13px; font-size: 18px; } .sides button[aria-pressed='true'] { background: var(--blue); color: var(--void); font-variation-settings: 'wdth' 110; } .sides button[data-side='sell'][aria-pressed='true'] { background: var(--red); }
+  .amt { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: baseline; padding-bottom: 10px; border-bottom: 1px solid var(--rule); } .amt label, .amt > span:first-child { color: var(--ash); font-size: 11px; } .bal { color: var(--ash); font-size: 11px; text-align: right; } .bal .plain { padding: 2px 0 2px 8px; font-size: 11px; } .amt.out > span { grid-column: 1 / -1; }
+  .amt input, .amt output { font: 600 24px/1.2 var(--data); color: var(--ink); background: none; border: 0; padding: 4px 0; min-width: 0; width: 100%; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; } .amt input::placeholder { color: #585858; } .amt b { font: 800 16px/1 var(--display); justify-self: end; }
+  .slip { display: flex; align-items: center; gap: 16px; } .slip span { color: var(--ash); font-size: 11px; margin-right: auto; } .slip button { font: 500 13px/1 var(--data); padding: 4px 2px; } .slip button[aria-pressed='true'] { color: var(--blue); }
+  .costs { margin: 0; display: grid; gap: 7px; font-variant-numeric: tabular-nums; } .costs div { display: flex; justify-content: space-between; gap: 14px; align-items: baseline; } .costs dd { font-size: 12px; text-align: right; white-space: nowrap; } .alarm { color: var(--void); background: var(--warn); padding: 1px 7px; }
+  .consent { display: flex; gap: 10px; align-items: flex-start; padding: 11px 12px; background: var(--warn); color: var(--void); font-weight: 500; } .consent[hidden] { display: none; } .consent input { margin: 3px 0 0; accent-color: var(--void); }
+  .native { display: flex; align-items: center; gap: 9px; font-size: 12px; cursor: pointer; width: fit-content; } .native[hidden] { display: none; } .native input { margin: 0; width: 16px; height: 16px; accent-color: var(--blue); } .plain:disabled { color: #585858; cursor: default; }
+  .go { font: 800 18px/1.1 var(--display); font-variation-settings: 'wdth' 100; padding: 16px; background: var(--blue); color: var(--void); } .go:hover:not(:disabled) { background: #f0f0f0; color: var(--void); } .go:disabled { background: #292929; color: #999; cursor: default; }
+  .msg { margin: 0; min-height: 1.5em; } .msg[data-bad] { color: var(--warn); } .tip { margin: 0; color: var(--ash); font-size: 11px; } .tip[hidden] { display: none; } .tip a { color: var(--blue); }
+  .h-ask { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; margin: 14px 0 0; } .h-ask span { color: var(--ash); font-size: 12px; } .h-ask span[data-bad] { color: var(--warn); }
+  .ask { font: 600 13px/1 var(--data); padding: 12px 16px; color: var(--ink); box-shadow: inset 0 0 0 1px var(--blue); background: color-mix(in srgb, var(--void) 80%, transparent); } .ask:hover:not(:disabled) { background: var(--blue); color: var(--void); } .ask:disabled { color: var(--ash); box-shadow: inset 0 0 0 1px var(--rule); cursor: default; }
+  .h-bar { height: 2px; margin-top: 14px; background: linear-gradient(90deg, var(--blue) calc(var(--p, 0) * 100%), var(--rule) 0); } .h-bar[hidden] { display: none; }
+  .sky { margin: 18px 0 0; border: 1px solid var(--rule); background: radial-gradient(ellipse at center, #0d1318, var(--void) 70%); } .sky canvas { display: block; width: 100%; height: clamp(340px, 46vw, 600px); touch-action: pan-y; } .sky figcaption { display: flex; flex-wrap: wrap; gap: 6px 22px; padding: 12px 16px; border-top: 1px solid var(--rule); color: var(--ash); font-size: 11px; } #h-drawn { margin-left: auto; }
+  .lg { display: inline-flex; align-items: center; gap: 7px; } .lg::before { content: ''; width: 10px; height: 10px; border-radius: 50%; box-sizing: border-box; } .lg.lw::before { background: var(--blue); } .lg.lc::before { background: #000; border: 1.5px solid #d8d8d8; } .lg.lq::before { border: 1.2px dashed #9a9a9a; } .lg.ls::before { width: 18px; height: 1px; border-radius: 0; background: var(--blue); }
+  .tip2 { margin: 12px 0 6px; max-width: 92ch; color: var(--ash); font-size: 12px; line-height: 1.55; } .tip2 span { color: var(--ink); }
+  .htab th a { font: 500 13px/1 var(--data); color: var(--ink); text-decoration: none; padding: 4px 0; } .htab th a:hover { color: var(--blue); text-decoration: underline; text-underline-offset: 4px; } .htab .cp { margin-left: 8px; padding: 4px 2px; font: 400 11px/1 var(--data); color: var(--ash); opacity: .55; } .htab .cp:hover, .htab .cp:focus-visible { color: var(--blue); opacity: 1; }
+  #liquidity { margin-top: 34px; } #liquidity h3 { margin: 0; font: 800 18px/1.2 var(--display); font-variation-settings: 'wdth' 120; } .tip2 b { font-weight: 400; color: var(--warn); }
+  .q-bar { display: flex; gap: 2px; height: 14px; margin: 18px 0 0; } .q-bar i { min-width: 1px; background: var(--blue); } .q-bar i:nth-child(even) { background: #2f7fb0; } .q-bar i.contract { background: #d8d8d8; } .q-bar i.quiet { background: #7c7c7c; } .q-bar i.rest { background: #252525; } .htab .kind { color: var(--ash); font-size: 12px; } .htab tr[data-on] td, .htab tr[data-on] th { background: color-mix(in srgb, var(--blue) 16%, transparent); }
+  .share { position: relative; min-width: 150px; } .share i { position: absolute; right: 14px; bottom: 7px; height: 2px; max-width: calc(100% - 28px); background: var(--blue); } .kind.contract + .share i { background: #d8d8d8; } .kind.quiet + .share i { background: #7c7c7c; }
+  .credit { color: var(--ash); font-size: 11px; }
+  .facts.lead dt, .facts.lead dd { text-shadow: 0 0 12px #000, 0 0 4px #000; }
+  .tabrow { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 28px; margin-bottom: 6px; }
+  .tabrow [role='tab'] { font: 800 24px/1.1 var(--display); font-variation-settings: 'wdth' 100; color: var(--ash); padding: 4px 0 8px; border-bottom: 2px solid transparent; }
+  .tabrow [role='tab']:hover { color: var(--ink); } .tabrow [role='tab'][aria-selected='true'] { color: var(--ink); font-variation-settings: 'wdth' 130; border-bottom-color: var(--blue); }
+  .tabrow small { font: 400 13px/1 var(--data); color: var(--ash); } .tabbed [role='tabpanel'][hidden] { display: none; }
+  #about[hidden], #about [hidden] { display: none; } #about h2 small { color: var(--blue); }
+  .about { display: flex; gap: 22px; align-items: flex-start; margin-top: 14px; } #p-logo { flex: none; width: 72px; height: 72px; object-fit: contain; background: #141414; border: 1px solid var(--rule); }
+  .p-desc { margin: 0 0 10px; max-width: 70ch; font-size: 15px; line-height: 1.55; overflow-wrap: anywhere; }
+  .p-links { display: flex; flex-wrap: wrap; gap: 8px 26px; margin: 0; padding: 0; list-style: none; font-size: 13px; } .p-links span { color: var(--ash); margin-right: 8px; } .p-links a { color: var(--blue); text-underline-offset: 4px; overflow-wrap: anywhere; }
+  .p-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px 22px; margin-top: 18px; padding: 18px; border: 1px solid var(--rule); background: var(--void); } .p-form .wide { grid-column: 1 / -1; }
+  .p-form label { display: grid; gap: 6px; color: var(--ash); font-size: 11px; } .p-form label small { float: right; } .p-form input, .p-form textarea { font: 400 14px/1.4 var(--data); color: var(--ink); background: #141414; border: 0; border-bottom: 1px solid var(--rule); padding: 9px 10px; resize: vertical; } .p-form [aria-invalid='true'] { border-bottom-color: var(--warn); }
+  .p-form em { min-height: 1em; color: var(--warn); font-style: normal; } .p-act { display: flex; align-items: center; gap: 20px; margin: 0; } .p-act .go { padding: 13px 22px; font-size: 16px; }
+  @media (max-width: 560px) { .about { flex-direction: column; } .pane { flex-direction: column; } .ohlc { position: static; padding: 8px 14px 0; font-size: 10px; } .ohlc span { background: none; box-shadow: none; } }
+  @media (max-width: 560px) {
+    table:has(#markets) :is(th, td):is(:nth-child(3), :nth-child(5), :nth-child(7), :nth-child(8)) { display: none; }
+    table:has(#trades) :is(th, td):nth-child(6) { display: none; }
+  }
+  @media (max-width: 480px) { table:has(#trades) :is(th, td):nth-child(5) { display: none; } }
+  @media (max-width: 420px) { table:has(#markets) :is(th, td):nth-child(2) { display: none; } }
+  @media (max-width: 400px) { .frames { gap: 4px 10px; } }
+  .addr #realm { display: inline-block; padding: 8px 0; }
+  @media (pointer: coarse) { .frames button, .tools button, .slip button { min-height: 36px; min-width: 32px; } .back a { display: inline-block; padding: 10px 0; } .tabrow [role='tab'] { min-height: 44px; } #files button { min-height: 40px; } }
+  .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 18px 26px; margin: 30px 0 6px; font-variant-numeric: tabular-nums; } .facts dd { font-size: 19px; } .facts.lead { margin: 0 0 24px; }
+  .block2 { margin-top: 40px; } h2 { margin: 0 0 6px; font: 800 24px/1.1 var(--display); font-variation-settings: 'wdth' 130; } h2 small { font: 400 13px/1 var(--data); color: var(--ash); margin-left: 10px; }
+  #markets button { font: 400 14px/1.2 var(--data); color: var(--ash); padding: 4px 0; } #markets button b { font: 800 18px/1.1 var(--display); font-variation-settings: 'wdth' 110; color: var(--ink); } #markets tr[aria-selected='true'] { background: linear-gradient(90deg, color-mix(in srgb, var(--blue) 30%, transparent), transparent 70%); } #markets th { padding-left: 12px; } .off { opacity: .5; }
+  #trades .c { font-size: 13px; } #trades td.c::before { content: none; } .none { color: var(--ash); margin: 16px 0; } .plain { font: 500 13px/1 var(--data); color: var(--blue); padding: 12px 0; text-decoration: underline; text-underline-offset: 4px; }
+  .sym { color: var(--ash); font-size: 11px; } .small { font-size: 11px; padding: 0; } .addr { display: flex; flex-wrap: wrap; gap: 4px 24px; align-items: center; margin: 4px 0 10px; } .addr a { overflow-wrap: anywhere; text-underline-offset: 4px; }
+  summary { cursor: pointer; width: fit-content; padding: 10px 16px; background: var(--blue); color: var(--void); font-weight: 600; list-style: none; } summary::-webkit-details-marker { display: none; } details[open] summary { background: #585858; color: var(--ink); }
+  .src { display: grid; grid-template-columns: minmax(150px, 220px) minmax(0, 1fr); border: 1px solid var(--rule); margin-top: 14px; } #files { display: flex; flex-direction: column; border-right: 1px solid var(--rule); } #files button { font: 400 13px/1.3 var(--data); text-align: left; padding: 9px 14px; overflow-wrap: anywhere; } #files button[aria-pressed='true'] { background: #1f1f1f; color: var(--blue); }
+  #code { margin: 0; padding: 16px 18px; max-height: 620px; overflow: auto; font: 400 13px/1.6 var(--data); tab-size: 4; white-space: pre; } #code b { color: var(--blue); font-weight: 500; } #code i { color: var(--ash); font-style: normal; } #code q { color: #a9dcfb; quotes: none; } #code q::before, #code q::after { content: none; }
+  .choices { display: flex; flex-wrap: wrap; gap: 10px 26px; font: 800 24px/1.2 var(--display); } .choices a { color: var(--blue); }
+  #stop .lede { margin-top: 0; } #page .state { margin-top: 34px; }
+  @media (max-width: 1000px) { .desk { grid-template-columns: minmax(0, 1fr); } .trade { position: relative; top: 0; min-height: 320px; } .slot.chart { min-height: 380px; } }
+  @media (max-width: 820px) { .hero.tok { padding-top: clamp(40px, 14vw, 120px); } .tok h1 { font-size: clamp(46px, calc(118vw / var(--n, 5)), 130px); } .now .right { margin-left: 0; } .src { grid-template-columns: minmax(0, 1fr); } #files { flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--rule); } #files button { white-space: nowrap; } }
+</style>

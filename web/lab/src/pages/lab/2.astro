@@ -1,0 +1,163 @@
+---
+import '@fontsource/tilt-neon/400.css';
+import '@fontsource-variable/saira/standard.css';
+import Switch from '../../lab/Switch.astro';
+import { TABS, WINDOWS } from '../../lab/market';
+---
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <title>DexVision Colony</title>
+</head>
+<body>
+  <section class="tube" id="tube">
+    <canvas id="city" aria-hidden="true"></canvas>
+    <header>
+      <a class="mark" href="#top">DexVision</a>
+      <dl id="chain"></dl>
+      <label class="search"><span class="vh">Search pairs</span><input data-search id="q" type="search" placeholder="Search token or realm" autocomplete="off" /><kbd>/</kbd></label>
+    </header>
+    <div class="sign">
+      <h1><span class="t1">Open</span> <span class="t2">every block</span></h1>
+      <p>The night market for gno.land. Live pairs, real liquidity, and the source of every token one tap away.</p>
+    </div>
+  </section>
+
+  <main class="board" id="top">
+    <div class="gantry">
+      <div class="tabs" role="group" aria-label="View">{TABS.map((t, i) => <button data-tab={t.id} aria-pressed={i === 0 ? 'true' : 'false'}>{t.label}</button>)}</div>
+      <div class="wins" role="group" aria-label="Time window">{WINDOWS.map((w) => <button data-win={w.id} aria-pressed={w.id === 'h24' ? 'true' : 'false'}>{w.label}</button>)}</div>
+      <p class="clock"><span>gnoland-1 block</span> <b id="height"></b></p>
+    </div>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Pair</th><th>Price</th><th>Change</th><th>Status</th><th class="r">Volume</th><th class="r">Liquidity</th><th class="r">Market cap</th><th class="r">Txns</th><th class="r">Age</th><th class="r">Pool</th><th class="r">Source</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+      <p id="empty" hidden>No departures match that search. Try a ticker or a path such as gno.land/r/demo.</p>
+    </div>
+    <p class="note">Simulated figures for design review.</p>
+  </main>
+  <Switch current={2} />
+
+  <script>
+    import { colony } from '../../lab/colony';
+    import { controls, view, subscribe, tokens, chain, price, usd, num, pct, age, calm, type Token } from '../../lab/market';
+    const $ = (id: string) => document.getElementById(id)!;
+    const COLS = { sym: 6, price: 9, ch: 7, st: 8 } as const;
+    const still = calm();
+
+    /* split-flap cells: each spins through a few characters, then lands */
+    const DRUM = 'ABCDEFGHIKLMNOPRSTUVXYZ0123456789';
+    const flap = (el: HTMLElement, target: string, wait: number) => {
+      if (el.dataset.to === target) return;
+      el.dataset.to = target;
+      if (still) { el.textContent = target; return; }
+      const run = ((+el.dataset.run! || 0) + 1); el.dataset.run = String(run);
+      let n = 2 + ((Math.random() * 4) | 0);
+      const step = () => {
+        if (el.dataset.run !== String(run)) return;
+        el.textContent = n-- > 0 ? DRUM[(Math.random() * DRUM.length) | 0] : target;
+        el.classList.remove('flip'); void el.offsetWidth; el.classList.add('flip');
+        if (n >= 0) setTimeout(step, 62);
+      };
+      setTimeout(step, wait);
+    };
+    const flaps = (key: string, n: number) => `<td class="f ${key}"><span class="vh"></span><span class="set" aria-hidden="true">${'<i></i>'.repeat(n)}</span></td>`;
+    const rows = tokens.map(() => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = flaps('sym', COLS.sym) + flaps('price', COLS.price) + flaps('ch', COLS.ch) + flaps('st', COLS.st) + '<td class="r vol"></td><td class="r liq"></td><td class="r mc"></td><td class="r tx"></td><td class="r age"></td><td class="r fee"></td><td class="r src"></td>';
+      $('rows').append(tr); return tr;
+    });
+    const status = (c: number, h: number) => (h < 24 ? ['BOARDING', 'new'] : c > 50 ? ['ORBIT', 'up'] : c > 5 ? ['LIFTING', 'up'] : c < -25 ? ['REENTRY', 'down'] : c < -5 ? ['FALLING', 'down'] : ['HOLDING', 'flat']);
+    const set = (tr: HTMLElement, key: keyof typeof COLS, text: string, wait: number) => {
+      const td = tr.querySelector('.f.' + key)!; td.firstElementChild!.textContent = text;
+      const s = key === 'price' ? text.padStart(COLS[key]) : text.padEnd(COLS[key]);
+      td.querySelectorAll<HTMLElement>('i').forEach((el, i) => flap(el, s[i] === ' ' ? '' : s[i] ?? '', wait + i * 18));
+    };
+    const fill = (tr: HTMLElement, t: Token, wait: number) => {
+      const c = t.ch[state.win], [st, k] = status(c, t.age);
+      tr.id = 'row-' + t.sym; tr.dataset.k = k; tr.dataset.s = c >= 0 ? 'up' : 'down';
+      set(tr, 'sym', t.sym, wait); set(tr, 'price', price(t.price), wait + 60); set(tr, 'ch', pct(c), wait + 120); set(tr, 'st', st, wait + 180);
+      const q = (s: string, v: string) => { tr.querySelector('.' + s)!.innerHTML = v; };
+      q('vol', usd(t.vol)); q('liq', usd(t.liq)); q('mc', usd(t.mcap)); q('tx', num(t.tx)); q('age', age(t.age)); q('fee', `${t.quote} <em>${t.fee}</em>`);
+      q('src', `<a href="https://${t.realm}">${t.realm.replace('gno.land', '')}</a>`);
+    };
+    function render(cascade = true) {
+      const list = view(state.tab, state.win, state.q);
+      rows.forEach((tr, i) => { tr.hidden = !list[i]; if (list[i]) fill(tr, list[i], cascade ? i * 28 : 0); });
+      $('empty').hidden = list.length > 0; stats();
+    }
+    function stats() {
+      $('height').textContent = num(chain.height);
+      $('chain').innerHTML = [['24h volume', usd(chain.vol)], ['Liquidity', usd(chain.liq)], ['24h txns', num(chain.tx)]].map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
+    }
+    const state = controls(() => render());
+    render();
+    const city = colony($('city') as HTMLCanvasElement, $('tube'), view('trending', 'h24'), (t) => {
+      const tr = document.getElementById('row-' + t.sym); if (!tr) return;
+      tr.scrollIntoView({ block: 'center', behavior: still ? 'auto' : 'smooth' }); tr.classList.add('hit'); setTimeout(() => tr.classList.remove('hit'), 2400);
+    });
+    subscribe((changed) => {
+      changed.forEach((t) => { const tr = document.getElementById('row-' + t.sym); if (tr && !tr.hidden) fill(tr, t, 0); });
+      city.refresh(changed); stats();
+    });
+  </script>
+</body>
+</html>
+
+<style is:global>
+  /* Layout: a street-level view down a spinning habitat; below it hangs the departures board. */
+  :root {
+    --deck: #03100f; --case: #0a1716; --flap: #15211f; --mint: #8dffe6; --sodium: #ff9a2e; --magenta: #ff4d97; --yellow: #ffe23d; --paper: #fff1c9; --steel: #86a8a3;
+    --neon: 'Tilt Neon', 'Arial Rounded MT Bold', sans-serif;
+    --ui: 'Saira Variable', 'Arial Narrow', sans-serif;
+    --gut: max(16px, 2.6vw);
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; } html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--deck); color: var(--paper); font: 400 15px/1.45 var(--ui); font-stretch: 88%; }
+  a { color: inherit; } :focus-visible { outline: 2px solid var(--yellow); outline-offset: 2px; }
+  .vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .tube { position: relative; height: clamp(520px, 72vh, 860px); overflow: hidden; background: #02090a; }
+  .tube[data-failed] { background: radial-gradient(circle at 50% 46%, var(--sodium), #0b3b3d 22%, #02090a 62%); }
+  #city { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .tube::after { content: ''; position: absolute; inset: auto 0 0; height: 130px; background: linear-gradient(transparent, var(--deck)); pointer-events: none; }
+  header { position: relative; z-index: 2; display: flex; align-items: center; gap: 34px; padding: 18px var(--gut); background: linear-gradient(#02090ae0, #02090a00); }
+  .mark { font: 34px/1 var(--neon); text-decoration: none; color: var(--yellow); text-shadow: 0 0 18px #ffe23d99, 0 0 2px #fff; }
+  dl { display: flex; gap: 26px; margin: 0 auto 0 0; font-variant-numeric: tabular-nums; } dt { font-size: 12px; color: #b7d3ce; line-height: 1.2; } dd { margin: 0; font-size: 18px; font-weight: 600; line-height: 1.2; }
+  .search { position: relative; flex: 0 1 290px; min-width: 0; } .search input { width: 100%; font: inherit; color: var(--paper); background: #03100fd9; border: 2px solid var(--mint); padding: 9px 34px 9px 12px; border-radius: 0; box-shadow: 0 0 16px #8dffe640, inset 0 0 12px #8dffe62e; }
+  .search input::placeholder { color: #a9c9c3; } kbd { position: absolute; right: 12px; top: 10px; font: inherit; color: var(--mint); pointer-events: none; }
+  .sign { position: absolute; z-index: 2; left: var(--gut); bottom: 52px; pointer-events: none; }
+  h1 { margin: 0; font: 400 clamp(60px, 10vw, 168px)/.86 var(--neon); letter-spacing: -.02em; }
+  h1 span { display: block; } .t1 { color: #fff3c4; text-shadow: 0 0 6px var(--sodium), 0 0 26px var(--sodium), 0 0 80px #ff7a00; }
+  .t2 { color: #fff; text-shadow: 0 0 6px var(--magenta), 0 0 26px var(--magenta), 0 0 80px #ff0062; animation: buzz 9s steps(1) infinite; }
+  @keyframes buzz { 0%, 91%, 94%, 97%, 100% { opacity: 1; } 92.5%, 95.5% { opacity: .35; } }
+  .sign p { max-width: 44ch; margin: 20px 0 0; font-size: 18px; text-shadow: 0 0 10px #02090a, 0 0 4px #02090a, 0 1px 2px #02090a; }
+
+  .board { position: relative; z-index: 3; margin: 0 var(--gut) 100px; background: var(--case); border: 2px solid #21403c; box-shadow: 0 -20px 90px #ff9a2e2b; }
+  .gantry { display: flex; flex-wrap: wrap; align-items: stretch; background: var(--yellow); color: #171300; }
+  .tabs, .wins { display: flex; flex-wrap: wrap; } .wins { margin-left: auto; border-left: 2px solid #171300; }
+  button { font: 600 16px/1 var(--ui); font-stretch: 80%; color: inherit; background: none; border: 0; padding: 16px 18px; cursor: pointer; }
+  button:hover { background: #17130022; } button[aria-pressed='true'] { background: #171300; color: var(--yellow); } .gantry :focus-visible { outline-color: #171300; outline-offset: -5px; }
+  .gantry button[aria-pressed='true']:focus-visible { outline-color: var(--yellow); }
+  .clock { margin: 0; padding: 0 20px; display: flex; align-items: center; gap: 8px; background: #171300; color: var(--yellow); font-variant-numeric: tabular-nums; }
+  .scroll { overflow-x: auto; padding: 6px 18px 18px; }
+  table { width: 100%; border-collapse: collapse; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  th { text-align: left; font-weight: 500; font-size: 13px; color: var(--steel); padding: 12px 8px 6px; } td { padding: 4px 8px; } .r { text-align: right; }
+  tr[hidden] { display: none; }
+  .set { display: inline-flex; vertical-align: middle; gap: 2px; perspective: 160px; }
+  .set i { position: relative; width: 21px; height: 34px; display: grid; place-items: center; font: 600 23px/1 var(--ui); font-stretch: 75%; background: linear-gradient(#1b2a28 49%, #060d0c 49% 52%, var(--flap) 52%); color: var(--paper); border-radius: 2px; transform-origin: 50% 50%; }
+  .set i::after { content: ''; position: absolute; inset: 49% 0 auto; height: 1px; background: #04090899; }
+  .sym i { color: var(--yellow); } [data-s='up'] .ch i { color: var(--mint); } [data-s='down'] .ch i { color: var(--magenta); }
+  [data-k='up'] .st i { color: var(--mint); } [data-k='down'] .st i { color: var(--magenta); } [data-k='new'] .st i { color: #171300; background: linear-gradient(#ffb04f 49%, #7a3f00 49% 52%, var(--sodium) 52%); }
+  .flip { animation: flip .062s ease-in; } @keyframes flip { from { transform: scaleY(.15); filter: brightness(1.7); } }
+  tbody tr:hover td { background: #8dffe612; } tr.hit td { background: #ffe23d40; }
+  em { font-style: normal; color: var(--sodium); } .src a { color: var(--steel); text-decoration: none; } .src a:hover { color: var(--mint); text-decoration: underline; }
+  #empty { padding: 26px 8px; margin: 0; color: var(--steel); } .note { margin: 0; padding: 0 26px 18px; font-size: 13px; color: var(--steel); }
+  @media (max-width: 900px) { header { flex-wrap: wrap; gap: 12px 22px; } dl { order: 3; flex-basis: 100%; } .search { margin-left: auto; flex: 1 1 160px; } .wins { margin-left: 0; border: 0; } .clock { padding: 12px 18px; flex: 1; } button { padding: 13px 12px; } .set i { width: 17px; height: 29px; font-size: 19px; } .sign p { font-size: 16px; padding-right: 16px; } }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; } html { scroll-behavior: auto; } }
+</style>

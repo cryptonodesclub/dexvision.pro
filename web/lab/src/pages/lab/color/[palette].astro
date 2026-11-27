@@ -1,0 +1,9 @@
+---
+import Cover from '../../../lab/HorizonCover.astro';
+import ColorSwitch from '../../../lab/ColorSwitch.astro';
+import { PALETTES } from '../../../lab/palettes';
+
+export const getStaticPaths = () => PALETTES.filter((p) => p.id !== 'ember').map((p) => ({ params: { palette: p.id }, props: { name: p.name } }));
+const { palette } = Astro.params;
+---
+<Cover palette={palette} title={`DexVision Horizon ${Astro.props.name}`}><ColorSwitch current={palette} /></Cover>

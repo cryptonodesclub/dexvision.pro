@@ -1,0 +1,26 @@
+{
+  "name": "lab",
+  "type": "module",
+  "version": "0.0.1",
+  "engines": {
+    "node": ">=22.23.4"
+  },
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro",
+    "dev:soon": "astro dev --config astro.launch.mjs",
+    "build:soon": "astro build --config astro.launch.mjs"
+  },
+  "dependencies": {
+    "@fontsource-variable/anybody": "^5.3.0",
+    "@fontsource-variable/handjet": "^5.3.1",
+    "@fontsource-variable/martian-mono": "^5.3.0",
+    "@fontsource-variable/saira": "^5.3.0",
+    "@fontsource-variable/sometype-mono": "^5.3.0",
+    "@fontsource/tilt-neon": "^5.3.0",
+    "astro": "^7.4.13",
+    "three": "^0.187.0"
+  }
+}

@@ -1,0 +1,100 @@
+---
+import '@fontsource-variable/anybody/standard.css';
+import '@fontsource-variable/martian-mono/standard.css';
+import '@fontsource/tilt-neon/400.css';
+import '@fontsource-variable/saira/standard.css';
+import '@fontsource-variable/handjet/full.css';
+import '@fontsource-variable/sometype-mono/wght.css';
+
+/** Guía comparativa: resume cada dirección con su propia tipografía y color. */
+const dirs = [
+  {
+    n: 1, key: 'a', name: 'Horizon', tag: 'El mercado es gravedad',
+    why: 'El primer logo de gno.land fue un agujero negro. Aquí es la única fuente de luz: la letra se deforma al acercarse y los pares orbitan según su volumen.',
+    up: ['Azul, se acerca', '#7cc0ff'], down: ['Rojo, se aleja', '#ff5a42'],
+    colors: [['Void', '#070405'], ['Ember', '#ff7a24'], ['Ink', '#ffefdc'], ['Blueshift', '#7cc0ff'], ['Redshift', '#ff5a42'], ['Ash', '#b39d92']],
+    type: ['Anybody', 'Martian Mono'],
+    rules: ['Sube y baja son desplazamiento Doppler, nunca verde y rojo.', 'Sin tarjetas: los datos van planos sobre el vacío.', 'El ancho de letra indica selección y cercanía.'],
+    risk: 'La más elegante y legible. Rosa la estética de cine espacial; menos callejera.',
+  },
+  {
+    n: 2, key: 'b', name: 'Colony', tag: 'El mercado es una ciudad',
+    why: 'Un hábitat giratorio con la ciudad pegada por dentro. Cada par es un rótulo de neón en el trayecto y la tabla es un panel de salidas con paletas que giran.',
+    up: ['Menta, despega', '#8dffe6'], down: ['Magenta, reentra', '#ff4d97'],
+    colors: [['Deck', '#03100f'], ['Sodium', '#ff9a2e'], ['Magenta', '#ff4d97'], ['Mint', '#8dffe6'], ['Yellow', '#ffe23d'], ['Paper', '#fff1c9']],
+    type: ['Tilt Neon', 'Saira'],
+    rules: ['El neón solo en rótulos: nunca en texto corrido.', 'El estado se lee en palabras: Lifting, Holding, Reentry.', 'Toda actualización gira una paleta, nada se funde.'],
+    risk: 'La más cyberpunk y con más espectáculo. También la más pesada en GPU.',
+  },
+  {
+    n: 3, key: 'c', name: 'Source', tag: 'El mercado es código',
+    why: 'En gno.land el código se lee en cadena. Un gnomo con anillos impreso con caracteres de Go, en serigrafía fluorescente a dos tintas y fuera de registro.',
+    up: ['Limón ▲', '#ecff40'], down: ['Bloque rosa ▼', '#ff6680'],
+    colors: [['Pink', '#ff6680'], ['Ink', '#130869'], ['Lemon', '#ecff40'], ['Pale', '#ffe6e0'], ['Hot', '#ff3029'], ['Lilac', '#b9b0ff']],
+    type: ['Handjet', 'Sometype Mono'],
+    rules: ['Todo gráfico se hace con caracteres: hasta las curvas de precio.', 'Tinta plana: sin sombras, sin degradados, sin brillo.', 'El código de cada token está a un clic.'],
+    risk: 'La más propia y reconocible; nadie en DeFi se ve así. La más polarizante.',
+  },
+];
+---
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <title>DexVision, tres portadas</title>
+</head>
+<body>
+  <h1>DexVision, tres portadas</h1>
+  <main>
+    {dirs.map((d) => (
+      <article class={d.key}>
+        <h2><a href={`/lab/${d.n}`}>{d.name}</a></h2>
+        <p class="tag">{d.tag}</p>
+        <p>{d.why}</p>
+        <ul class="sw">{d.colors.map(([n, c]) => <li><i style={`background:${c}`}></i><span>{n}</span><code>{c}</code></li>)}</ul>
+        <p class="ud"><span><i style={`background:${d.up[1]}`}></i>{d.up[0]}</span><span><i style={`background:${d.down[1]}`}></i>{d.down[0]}</span></p>
+        <div class="spec"><p class="big">0.0712</p><p>{d.type[0]} para titulares. {d.type[1]} para datos.</p></div>
+        <ul class="rules">{d.rules.map((r) => <li>{r}</li>)}</ul>
+        <p class="risk">{d.risk}</p>
+        <a class="go" href={`/lab/${d.n}`}>Abrir {d.name}</a>
+      </article>
+    ))}
+  </main>
+  <nav class="var" aria-label="Horizon ligero">
+    <a href="/lab/lite/gnoland" style="--k:#49afeb"><b>Gnoland</b>Negro, grises y azul oficiales, en el motor ligero</a>
+    <a href="/lab/lite/ember"><b>Horizon Lite</b>La portada original, precalculada para no cargar la GPU</a>
+  </nav>
+  <nav class="var" aria-label="Colores de Horizon">
+    <a href="/lab/color/cherenkov" style="--k:#1fe0a4"><b>Cherenkov</b>Verde reactor, lima sube y coral baja</a>
+    <a href="/lab/color/plasma" style="--k:#ff3d9a"><b>Plasma</b>Magenta, cian sube y naranja baja</a>
+    <a href="/lab/color/eclipse" style="--k:#ffe32e"><b>Eclipse</b>Plata, amarillo sube y violeta baja</a>
+  </nav>
+  <nav class="var" aria-label="Variantes de Horizon">
+    <a href="/lab/horizon/shadow"><b>Shadow</b>La sombra es la pantalla</a>
+    <a href="/lab/horizon/spectrum"><b>Spectrum</b>El disco es el eje del gráfico</a>
+    <a href="/lab/horizon/observatory"><b>Observatory</b>Cada par es su agujero negro</a>
+  </nav>
+</body>
+</html>
+<style>
+  * { box-sizing: border-box; } body { margin: 0; background: #070405; }
+  h1 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  main { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(9, auto) 1fr; min-height: 100vh; }
+  article { display: grid; grid-row: span 10; grid-template-rows: subgrid; align-content: start; padding: 4vw clamp(16px, 2.6vw, 48px) 40px; min-width: 0; line-height: 1.55; font-size: 15px; }
+  p, ul { margin: 0 0 22px; padding: 0; } ul { list-style: none; } a { color: inherit; text-decoration: none; }
+  h2 { margin: 0 0 12px; line-height: .9; white-space: nowrap; } .tag { font-size: 20px; line-height: 1.25; }
+  .sw { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; font-size: 12px; line-height: 1.35; } .sw i { display: block; height: 58px; margin-bottom: 5px; outline: 1px solid #ffffff33; outline-offset: -1px; } .sw span, .sw code { display: block; font: inherit; overflow-wrap: anywhere; }
+  .ud { display: flex; flex-wrap: wrap; gap: 8px 20px; } .ud span { display: flex; align-items: center; gap: 8px; } .ud i { width: 16px; height: 16px; outline: 1px solid #0006; }
+  .big { margin: 0 0 6px; font-size: clamp(52px, 6vw, 96px); line-height: .9; } .rules li { padding: 9px 0; border-top: 1px solid currentColor; }
+  .go { display: block; align-self: end; padding: 18px 20px; text-align: center; font-size: 20px; } a:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+  .a { background: radial-gradient(circle at 100% 0, #ff7a2459, #07040500 46%), #070405; color: #ffefdc; font-family: 'Martian Mono Variable', monospace; font-stretch: 85%; font-size: 13px; }
+  .a h2 { font: 850 clamp(34px, 4.6vw, 78px)/.95 'Anybody Variable', sans-serif; font-variation-settings: 'wdth' 100; transition: font-variation-settings .5s; } .a:hover h2 { font-variation-settings: 'wdth' 60; } .a .big { font-family: 'Anybody Variable'; font-weight: 800; font-variation-settings: 'wdth' 120; color: #ff7a24; } .a .go { background: #ff7a24; color: #070405; font-family: 'Anybody Variable'; font-weight: 800; }
+  .b { background: radial-gradient(circle at 50% 0, #ff4d974d, #0000 42%), #03100f; color: #fff1c9; font-family: 'Saira Variable', sans-serif; font-stretch: 88%; font-size: 16px; }
+  .b h2 { font: 400 clamp(52px, 6.8vw, 112px)/.8 'Tilt Neon', sans-serif; color: #fff; text-shadow: 0 0 6px #ff4d97, 0 0 28px #ff0062; } .b .big { font-family: 'Saira Variable'; font-weight: 600; font-stretch: 75%; letter-spacing: .06em; color: #ffe23d; background: linear-gradient(#1b2a28 49%, #060d0c 49% 52%, #15211f 52%); width: fit-content; padding: 8px 12px; } .b .go { background: #ffe23d; color: #171300; font-weight: 600; }
+  .c { background: #ff6680; color: #130869; font-family: 'Sometype Mono Variable', monospace; font-weight: 600; }
+  .c h2 { font: 900 clamp(64px, 8.4vw, 140px)/.62 'Handjet Variable', monospace; text-shadow: .035em .028em 0 #ff3029; } .c .big { font-family: 'Handjet Variable'; font-weight: 900; font-size: clamp(64px, 7.4vw, 120px); line-height: .7; } .c .go { background: #130869; color: #ecff40; font: 600 30px/.8 'Handjet Variable'; }
+  .var { display: grid; grid-template-columns: repeat(3, 1fr); background: #070405; color: #ffefdc; font: 400 13px/1.5 'Martian Mono Variable', monospace; font-stretch: 85%; } .var a { padding: 34px clamp(16px, 2.6vw, 48px) 44px; border-top: 1px solid var(--k, #ff7a24); } .var b { display: block; font: 800 34px/1.1 'Anybody Variable', sans-serif; color: var(--k, #ff7a24); } .var a:hover { background: #ff7a2426; }
+  @media (max-width: 900px) { .var { display: block; } .var a { display: block; } main { display: block; } article { display: block; } }
+</style>

@@ -1,0 +1,159 @@
+---
+import '@fontsource-variable/handjet/full.css';
+import '@fontsource-variable/sometype-mono/wght.css';
+import Switch from '../../lab/Switch.astro';
+import { TABS, WINDOWS } from '../../lab/market';
+---
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <title>DexVision Source</title>
+</head>
+<body>
+  <section class="poster" id="top">
+    <canvas id="gnome" aria-hidden="true"></canvas>
+    <header>
+      <a class="mark" href="#top">DexVision</a>
+      <label class="search"><span class="vh">Search pairs</span><input data-search id="q" type="search" placeholder="ticker or gno.land/r/…" autocomplete="off" /><kbd>/</kbd></label>
+      <p>gnoland-1 <b id="height"></b></p>
+    </header>
+    <div class="copy">
+      <h1><span>Read it</span><span>before</span><span>you ape it</span></h1>
+      <p>Every gno.land pair, live. Open a row to read the Go that runs the token.</p>
+      <dl id="chain"></dl>
+    </div>
+  </section>
+
+  <section class="movers" aria-label="Biggest movers"><div id="movers"></div></section>
+
+  <main class="ledger">
+    <div class="bar">
+      <div class="tabs" role="group" aria-label="View">{TABS.map((t, i) => <button data-tab={t.id} aria-pressed={i === 0 ? 'true' : 'false'}>{t.label}</button>)}</div>
+      <div class="wins" role="group" aria-label="Time window">{WINDOWS.map((w) => <button data-win={w.id} aria-pressed={w.id === 'h24' ? 'true' : 'false'}>{w.label}</button>)}</div>
+    </div>
+    <div class="scroll">
+      <table>
+        <thead><tr><th class="l">Pair</th><th>Price</th><th class="l">24h trace</th><th>Change</th><th>Volume</th><th>Liquidity</th><th>Market cap</th><th>Txns</th><th>Age</th><th>Source</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+      <p id="empty" hidden>No pair matches that search. Try a ticker or a path such as gno.land/r/demo.</p>
+    </div>
+    <p class="note">Simulated figures and illustrative source for design review.</p>
+  </main>
+  <Switch current={3} />
+
+  <script>
+    import { source } from '../../lab/source';
+    import { controls, view, subscribe, tokens, chain, price, usd, num, pct, age, type Token } from '../../lab/market';
+    const $ = (id: string) => document.getElementById(id)!;
+    source($('gnome') as HTMLCanvasElement);
+
+    /* braille area trace: 20 characters hold 40 x 8 dots */
+    const trace = (v: number[]) => {
+      const lo = Math.min(...v), hi = Math.max(...v), H = 8, hs = v.map((x) => 1 + Math.round(((x - lo) / (hi - lo || 1)) * (H - 1)));
+      const L = [0x40, 0x04, 0x02, 0x01], R = [0x80, 0x20, 0x10, 0x08];
+      return [1, 0].map((row) => { let s = ''; for (let i = 0; i < v.length; i += 2) { let b = 0x2800; for (let d = 0; d < 4; d++) { if (hs[i] > row * 4 + d) b |= L[d]; if (hs[i + 1] > row * 4 + d) b |= R[d]; } s += String.fromCharCode(b); } return s; }).join('\n');
+    };
+    const k = (c: number) => (c >= 0 ? 'up' : 'down'), arrow = (c: number) => (c >= 0 ? '▲' : '▼') + pct(c).slice(1);
+    let open = '';
+    const cell = (t: Token) => { const c = t.ch[state.win];
+      return `<th scope="row" class="l"><b>${t.sym}</b><span>${t.quote} ${t.fee}</span></th><td class="p ${t.dir ? 'tick' : ''}">${price(t.price)}</td><td class="l"><pre class="${k(t.ch.h24)}" aria-hidden="true">${trace(t.spark)}</pre></td><td class="c ${k(c)}"><span>${arrow(c)}</span></td><td>${usd(t.vol)}</td><td>${usd(t.liq)}</td><td>${usd(t.mcap)}</td><td>${num(t.tx)}</td><td>${age(t.age)}</td><td><button class="read" data-read="${t.sym}" aria-expanded="${open === t.sym}">${open === t.sym ? 'Close' : 'Read'}</button></td>`; };
+    const kw = (s: string) => s.replace(/\b(package|import|func|var|return|if|panic)\b/g, '<b>$1</b>');
+    const code = (t: Token) => `<tr class="src" id="src-${t.sym}"><td colspan="10"><div><p><a href="https://${t.realm}">${t.realm}</a></p><pre>${kw(`package ${t.realm.split('/').pop()}
+
+var token, ledger = grc20.NewToken("${t.name}", "${t.sym}", 6)
+
+func Transfer(cur realm, to address, amount int64) {
+	checkErr(userTeller.Transfer(to, amount))
+}
+
+func Mint(cur realm, to address, amount int64) {
+	if !owner.Owned() { panic("only the owner can mint") }
+	checkErr(ledger.Mint(to, amount))
+}`)}</pre><ul><li><b>Mint</b> owner only</li><li><b>Burn</b> none</li><li><b>Pause</b> none</li><li><b>Decimals</b> 6</li></ul></div></td></tr>`;
+    function render() {
+      const list = view(state.tab, state.win, state.q);
+      $('rows').innerHTML = list.map((t) => `<tr id="row-${t.sym}">${cell(t)}</tr>${open === t.sym ? code(t) : ''}`).join('');
+      $('empty').hidden = list.length > 0; stats(); movers();
+    }
+    function movers() {
+      const top = [...view('gainers', state.win).slice(0, 4), ...view('losers', state.win).slice(0, 1)];
+      $('movers').innerHTML = top.map((t) => `<a href="#row-${t.sym}" data-jump="${t.sym}" class="${k(t.ch[state.win])}"><b>${t.sym}</b><strong>${arrow(t.ch[state.win])}</strong><span>${price(t.price)}</span></a>`).join('');
+    }
+    function stats() {
+      $('height').textContent = num(chain.height);
+      $('chain').innerHTML = [['24h volume', usd(chain.vol)], ['Liquidity', usd(chain.liq)], ['24h txns', num(chain.tx)]].map(([a, b]) => `<div><dt>${a}</dt><dd>${b}</dd></div>`).join('');
+    }
+    const state = controls(render);
+    document.addEventListener('click', (e) => {
+      const el = (e.target as Element).closest<HTMLElement>('[data-read]'); if (!el) return;
+      const id = el.dataset.read!; open = open === id ? '' : id; render();
+      document.querySelector<HTMLElement>(`[data-read="${id}"]`)?.focus({ preventScroll: true });
+    });
+    open = view('trending', 'h24')[1].sym;
+    render();
+    subscribe((changed) => {
+      tokens.forEach((t) => { if (!changed.includes(t)) t.dir = 0; });
+      const f = (document.activeElement as HTMLElement)?.dataset?.read;
+      changed.forEach((t) => { const r = document.getElementById('row-' + t.sym); if (r) r.innerHTML = cell(t); });
+      if (f && changed.some((t) => t.sym === f)) document.querySelector<HTMLElement>(`[data-read="${f}"]`)?.focus({ preventScroll: true });
+      stats();
+    });
+  </script>
+</body>
+</html>
+
+<style is:global>
+  /* Layout: a two-ink screenprint. Fluorescent poster on top, ultramarine ledger below, lemon strip between. */
+  :root {
+    --pink: #ff6680; --ink: #130869; --deep: #0d0450; --lemon: #ecff40; --pale: #ffe6e0; --hot: #ff3029; --lilac: #b9b0ff;
+    --dot: 'Handjet Variable', 'Courier New', monospace;
+    --mono: 'Sometype Mono Variable', ui-monospace, monospace;
+    --gut: max(16px, 3vw);
+  }
+  * { box-sizing: border-box; } html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--ink); color: var(--pale); font: 500 14px/1.45 var(--mono); }
+  a { color: inherit; } :focus-visible { outline: 3px solid var(--lemon); outline-offset: 2px; }
+  .vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .poster { position: relative; height: clamp(560px, 76vh, 880px); background: var(--pink); color: var(--ink); overflow: hidden; }
+  #gnome { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .poster :focus-visible { outline-color: var(--ink); }
+  header { position: relative; z-index: 2; display: flex; align-items: center; gap: 26px; padding: 18px var(--gut); font-weight: 600; }
+  header p { margin: 0; background: var(--ink); color: var(--lemon); padding: 10px 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .mark { font: 800 44px/.8 var(--dot); text-decoration: none; }
+  .search { position: relative; margin-left: auto; flex: 0 1 300px; min-width: 0; } .search input { width: 100%; font: inherit; color: var(--ink); background: var(--lemon); border: 3px solid var(--ink); border-radius: 0; padding: 7px 32px 7px 10px; }
+  .search input::placeholder { color: #4a3f8c; } kbd { position: absolute; right: 12px; top: 10px; font: inherit; pointer-events: none; }
+  .copy { position: absolute; z-index: 2; left: var(--gut); bottom: 30px; pointer-events: none; }
+  h1 { margin: 0; font: 650 clamp(84px, min(12.8vw, 18.5vh), 230px)/.72 var(--dot); letter-spacing: -.03em; animation: element 14s ease-in-out infinite alternate; }
+  h1 span { display: block; white-space: nowrap; mix-blend-mode: multiply; text-shadow: .035em .028em 0 #ff3029b3; }
+  @keyframes element { 0%, 30% { font-variation-settings: 'ELSH' 2, 'ELGR' 1; } 45%, 60% { font-variation-settings: 'ELSH' 8, 'ELGR' 1; } 75%, 100% { font-variation-settings: 'ELSH' 13, 'ELGR' 1.4; } }
+  .copy > p { max-width: 40ch; margin: 44px 0 18px; font-size: 17px; font-weight: 700; background: var(--pink); box-shadow: 0 0 0 8px var(--pink); width: fit-content; }
+  dl { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; } dl div { background: var(--ink); color: var(--pale); padding: 7px 12px; } dt { font-size: 12px; color: var(--lilac); } dd { margin: 0; font: 700 30px/.9 var(--dot); font-variant-numeric: tabular-nums; }
+
+  .movers { background: var(--lemon); color: var(--ink); } .movers > div { display: grid; grid-template-columns: repeat(5, 1fr); padding: 0 calc(var(--gut) - 16px); }
+  .movers a { text-decoration: none; display: grid; grid-template-columns: 1fr auto; padding: 14px 16px 12px; border-left: 3px solid var(--ink); } .movers a:last-child { border-right: 3px solid var(--ink); }
+  .movers b { font-size: 16px; } .movers strong { grid-row: 2; grid-column: 1 / -1; font: 800 58px/.82 var(--dot); } .movers a:hover { background: var(--ink); color: var(--lemon); }
+  .movers a.up { color: var(--ink); } .movers a.up:hover { color: var(--lemon); }
+  .movers .down { background: var(--hot); color: var(--deep); } .movers .down:hover { background: var(--deep); color: #ff8a84; }
+  .movers :focus-visible { outline-color: var(--ink); outline-offset: -6px; }
+
+  .ledger { padding: 34px var(--gut) 100px; }
+  .bar { display: flex; flex-wrap: wrap; gap: 10px 30px; justify-content: space-between; align-items: end; margin-bottom: 16px; } .tabs, .wins { display: flex; flex-wrap: wrap; gap: 4px; }
+  button { font: 700 26px/1 var(--dot); color: var(--lilac); background: none; border: 0; padding: 7px 12px; cursor: pointer; } button:hover { color: #fff; background: #2a1c96; } button[aria-pressed='true'] { background: var(--pink); color: var(--deep); }
+  .scroll { overflow-x: auto; } table { width: 100%; border-collapse: collapse; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  th, td { text-align: right; padding: 9px 14px; font-weight: 500; } .l { text-align: left; } thead th { color: var(--lilac); font-size: 12px; background: var(--deep); }
+  tbody tr:not(.src) { border-bottom: 2px dotted #4636b5; } tbody tr:not(.src):hover { background: #22148a; } tbody tr:target { background: #3a2bb0; }
+  tbody th b { font: 800 31px/.8 var(--dot); color: #fff; margin-right: 10px; } tbody th span { color: var(--lilac); font-size: 12px; }
+  .p { font-size: 16px; } pre { margin: 0; font: 400 15px/1 var(--mono); } td > pre { font-family: 'DejaVu Sans Mono', 'Menlo', 'Segoe UI Symbol', monospace; font-size: 13px; line-height: 13px; letter-spacing: 0; }
+  .up { color: var(--lemon); } .down { color: #ff8095; } .c span { font: 700 27px/.9 var(--dot); } td.c.down span { background: var(--pink); color: var(--deep); padding: 1px 8px; margin-right: -8px; }
+  @keyframes tick { from { background: var(--lemon); color: var(--ink); } } .tick { animation: tick .7s steps(4); }
+  .read { font-size: 22px; color: var(--ink); background: var(--lilac); padding: 4px 12px; } .read:hover, .read[aria-expanded='true'] { background: var(--lemon); color: var(--ink); }
+  .src td { padding: 0; text-align: left; } .src td > div { background: var(--pale); color: var(--ink); padding: 18px 22px 22px; display: grid; grid-template-columns: 1fr auto; gap: 8px 50px; } .src p { margin: 0; grid-column: 1 / -1; font-weight: 700; } .src pre { font: 500 14px/1.5 var(--mono); tab-size: 4; white-space: pre; overflow-x: auto; } .src pre b { color: #c4002f; }
+  .src ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; align-content: start; min-width: 190px; } .src li { border-bottom: 2px dotted var(--ink); display: flex; justify-content: space-between; gap: 20px; padding-bottom: 4px; }
+  #empty, .note { color: var(--lilac); } .note { font-size: 12px; margin: 18px 0 0; }
+  @media (max-width: 900px) { header { flex-wrap: wrap; gap: 12px; } header p { margin-left: auto; } .search { order: 3; flex-basis: 100%; } .poster { height: 900px; } #gnome { width: 100%; height: 480px; inset: 100px 0 auto; } h1 { font-size: clamp(64px, 19vw, 150px); } .copy > p { font-size: 15px; } .movers > div { display: flex; overflow-x: auto; } .movers a { flex: 0 0 225px; } .src td > div { grid-template-columns: 1fr; } }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; } html { scroll-behavior: auto; } }
+</style>

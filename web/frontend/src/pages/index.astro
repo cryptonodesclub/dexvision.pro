@@ -1,0 +1,51 @@
+---
+import Head from '../components/Head.astro';
+import Header from '../components/Header.astro';
+import Units from '../components/Units.astro';
+import Spectra from '../components/Spectra.astro';
+
+const tabs = [['trending', 'Trending'], ['gainers', 'Gainers'], ['losers', 'Losers'], ['new', 'New'], ['volume', 'Top volume']];
+const wins = [['3600000', '1H'], ['21600000', '6H'], ['86400000', '24H'], ['604800000', '7D']];
+const description = 'Live token prices on gno.land, read straight from the chain: Gnoswap pools and Gnomi launches.';
+---
+<!doctype html>
+<html lang="en">
+<head><Head title="DexVision" share="DexVision, live token prices on gno.land" description={description} canonical="/" /></head>
+<body>
+  <canvas id="hole" aria-hidden="true"></canvas>
+  <Header filter />
+
+  <main id="top">
+    <section class="hero">
+      <h1 aria-label="Watch price bend"><span>Watch</span><span>price</span><span>bend</span></h1>
+      <p class="lede">Prices read straight from gno.land. The more a token trades, the closer it orbits. <b class="up">Blue is coming toward you.</b> <b class="down">Coral is leaving.</b></p>
+      <dl class="chain">
+        <div><dt id="volk">24h volume</dt><dd id="vol">–</dd></div>
+        <div><dt>Locked, <span class="unit">GNOT</span></dt><dd id="locked">–</dd></div>
+        <div><dt id="trk">24h trades</dt><dd id="trades">–</dd></div>
+        <div><dt>Tokens</dt><dd id="ntok">–</dd></div>
+      </dl>
+    </section>
+    <div id="orbit" class="orbit" aria-label="Most traded tokens in orbit"></div>
+
+    <section class="market" id="market">
+      <div class="bar">
+        <div class="tabs" role="group" aria-label="View">{tabs.map(([id, l], i) => <button data-tab={id} aria-pressed={i === 0 ? 'true' : 'false'}>{l}</button>)}</div>
+        <div class="right"><label class="pickm"><span>Market</span><select id="venue"><option value="">All markets</option></select></label><Units /><div class="wins" role="group" aria-label="Time window">{wins.map(([ms, l]) => <button data-win={ms} aria-pressed={l === '24H' ? 'true' : 'false'}>{l}</button>)}</div></div>
+      </div>
+      <div class="scroll">
+        <table>
+          <thead><tr><th class="l" data-sort="token" data-first="asc">Token</th><th data-sort="price">Price <span class="unit">GNOT</span></th><th class="l sp">Shift <i>blue to coral</i></th><th data-sort="change">Change</th><th data-sort="volume">Volume <span class="unit">GNOT</span></th><th data-sort="depth">Depth <span class="unit">GNOT</span></th><th data-sort="cap">Market cap <span class="unit">GNOT</span></th><th data-sort="trades">Trades</th><th data-sort="accounts">Accounts</th><th class="l" data-sort="market" data-first="asc">Market</th><th data-sort="age" data-first="asc">Age</th></tr></thead>
+          <tbody id="rows"><tr class="wait"><td colspan="11">Reading the chain</td></tr></tbody>
+        </table>
+        <p id="empty" hidden></p>
+      </div>
+      <p class="state" id="state" role="status"></p>
+      <p class="state">Past trades are kept on this device so they are read only once. <button id="forget" class="plain">Clear them</button></p>
+      <noscript><p class="note">DexVision reads the chain from your browser, so it needs JavaScript.</p></noscript>
+    </section>
+  </main>
+  <script>import '../app/cover.ts';</script>
+  <Spectra />
+</body>
+</html>

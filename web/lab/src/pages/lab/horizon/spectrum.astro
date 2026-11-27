@@ -1,0 +1,128 @@
+---
+import '@fontsource-variable/anybody/standard.css';
+import '@fontsource-variable/martian-mono/standard.css';
+import '../../../lab/hz.css';
+import Head from '../../../lab/HzHead.astro';
+import Market from '../../../lab/HzMarket.astro';
+import Switch from '../../../lab/HzSwitch.astro';
+---
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <title>DexVision Horizon Spectrum</title>
+</head>
+<body>
+  <canvas id="hole" aria-hidden="true"></canvas>
+  <Head />
+  <main id="top">
+    <section class="hero">
+      <h1 aria-label="Watch price bend"></h1>
+      <div class="plot" id="plot" role="group" aria-label="Pairs by change (horizontal) and volume (height)"><svg id="stems" aria-hidden="true"></svg><div id="marks"></div><div id="axis" aria-hidden="true"></div></div>
+    </section>
+    <section class="market">
+      <div class="intro"><p>Left is leaving, right is arriving. <b>Taller trades more.</b></p><dl class="chain" id="chain"></dl></div>
+      <Market />
+    </section>
+  </main>
+  <Switch current="spectrum" />
+  <script>
+    import { horizon, type Scene } from '../../../lab/horizon';
+    import { market, tone } from '../../../lab/hz';
+    import { tokens, pct, usd, calm, type Token } from '../../../lab/market';
+    const $ = (id: string) => document.getElementById(id)!;
+
+    const h1 = document.querySelector('h1')!, letters: HTMLElement[] = [];
+    for (const word of ['Watch', 'price', 'bend']) { const w = document.createElement('span'); w.setAttribute('aria-hidden', 'true'); for (const c of word) { const i = document.createElement('i'); i.textContent = c; w.append(i); letters.push(i); } h1.append(w); }
+
+    const scene: Scene = { incl: 0.055, roll: 0, zoom: 2, dim: 1, off: [0, 0], t: 8, outer: 19, dist: 24, flip: -1, jitter: 1, fall: 0.92, glow: 0.8 };
+    const g = { W: 0, plotTop: 0, plotH: 0, disk: 0, R: 0 };
+    function layout() {
+      const W = innerWidth, H = innerHeight, p = $('plot');
+      g.W = W; g.plotTop = p.getBoundingClientRect().top + scrollY; g.plotH = p.clientHeight; g.disk = g.plotH - 74;
+      g.R = Math.min(W * 0.12, H * 0.2);
+      scene.zoom = (g.R / H) * (24 / 2.63);
+      place();
+    }
+    /* symmetric log: 0% sits on the hole */
+    let MAXP = 200; // full scale, refitted to the selected window
+    const sx = (c: number) => { const k = MAXP / 50; return Math.sign(c) * Math.log1p(Math.min(Math.abs(c), MAXP) / k) / Math.log1p(50); };
+    const X = (c: number) => g.W / 2 + sx(c) * (g.W / 2 - Math.max(44, g.W * 0.045));
+    const ticks = (narrow: boolean) => { const f = narrow ? [0.025, 0.25, 1] : [0.025, 0.1, 0.25, 0.5, 1]; return [...f.map((x) => -x * MAXP), 0, ...f.map((x) => x * MAXP)].filter((t) => t > -100); };
+
+    const marks = tokens.map((t) => { const a = document.createElement('a'); a.href = '#row-' + t.sym; $('marks').append(a); return { t, a, x: 0, y: 0, tx: 0, ty: 0, line: document.createElementNS('http://www.w3.org/2000/svg', 'line') }; });
+    marks.forEach((k) => $('stems').append(k.line));
+    const vmax = Math.log(Math.max(...tokens.map((t) => t.vol))), vmin = Math.log(Math.min(...tokens.map((t) => t.vol)));
+    let visible = new Set(tokens.map((t) => t.sym));
+    function place() {
+      if (!g.W) return;
+      const top = Math.max(...tokens.map((t) => Math.abs(t.ch[m.state.win])));
+      MAXP = [2, 4, 10, 20, 40, 100, 200, 400, 1000].find((x) => x >= top) ?? 10000;
+      const narrow = g.W < 820, used: { x: number; y: number; w: number }[] = [];
+      [...marks].sort((a, b) => b.t.vol - a.t.vol).forEach((k, rank) => {
+        const c = k.t.ch[m.state.win], v = (Math.log(k.t.vol) - vmin) / (vmax - vmin);
+        const size = narrow ? 13 + v * 8 : 15 + v * 25;
+        k.a.hidden = !visible.has(k.t.sym) || (narrow && rank > 8); k.line.style.display = k.a.hidden ? 'none' : '';
+        k.a.className = tone(c); k.a.style.setProperty('--s', size + 'px');
+        k.a.innerHTML = `<b>${k.t.sym}</b><span>${pct(c)}</span>`; k.a.title = `${k.t.name}, ${usd(k.t.vol)} volume`;
+        k.tx = X(c); const w = k.a.offsetWidth / 2 || 30, hh = k.a.offsetHeight || 34;
+        k.tx = Math.max(w + 8, Math.min(g.W - w - 8, k.tx));
+        k.ty = g.disk - 64 - v * (g.disk - 128);
+        // keep labels clear of one another; nudge down, then up
+        if (!k.a.hidden) {
+          const base = k.ty, hit = (y: number) => y < 14 || y > g.disk - 30 || used.some((u) => Math.abs(u.x - k.tx) < u.w + w + 6 && Math.abs(u.y - y) < hh + 3);
+          for (let i = 0; i < 60; i++) { const d = Math.ceil(i / 2) * 9 * (i % 2 ? 1 : -1); if (!hit(base + d)) { k.ty = base + d; break; } }
+          used.push({ x: k.tx, y: k.ty, w });
+        }
+        if (!k.x || calm()) { k.x = k.tx; k.y = k.ty; }
+        k.line.setAttribute('class', tone(c));
+      });
+      $('axis').innerHTML = ticks(narrow).map((t) => `<i style="left:${X(t)}px">${t > 0 ? '+' : t < 0 ? '−' : ''}${+Math.abs(t).toFixed(2)}%</i>`).join('');
+      paint();
+    }
+    function paint() {
+      for (const k of marks) {
+        k.a.style.transform = `translate(${k.x.toFixed(1)}px,${k.y.toFixed(1)}px) translate(-50%,-100%)`;
+        const L = k.line, x = k.x.toFixed(1); L.setAttribute('x1', x); L.setAttribute('x2', x); L.setAttribute('y1', (k.y + 2).toFixed(1)); L.setAttribute('y2', String(g.disk));
+      }
+    }
+    const m = market({ onList: (l) => { visible = new Set(l.map((t: Token) => t.sym)); place(); }, onTick: () => place() });
+    m.start();
+    layout(); addEventListener('resize', layout); document.fonts.ready.then(layout);
+    const mouse = { x: -9999, y: -9999 }; addEventListener('pointermove', (e) => { mouse.x = e.clientX; mouse.y = e.clientY; });
+    horizon($('hole') as HTMLCanvasElement, scene, (dt) => {
+      const s = Math.min(1, scrollY / innerHeight);
+      scene.dim = 1 - s * 0.8; scene.incl = 0.055 + s * 0.5;
+      scene.off[1] = 0.5 - (g.plotTop + g.disk - scrollY) / innerHeight;
+      const k = 1 - Math.exp(-dt * 5);
+      for (const q of marks) { q.x += (q.tx - q.x) * k; q.y += (q.ty - q.y) * k; }
+      paint();
+      letters.forEach((l) => {
+        const x = l.offsetLeft + l.offsetWidth / 2, d = Math.abs(x - innerWidth / 2) / (innerWidth / 2);
+        const pull = Math.exp(-d * d * 4.2), near = Math.exp(-Math.pow(Math.hypot(x - mouse.x, 150 - scrollY - mouse.y) / 150, 2));
+        l.style.fontVariationSettings = `'wdth' ${(62 + pull * 70 - near * 12).toFixed(1)}, 'wght' ${(860 - pull * 560 + near * 300).toFixed(0)}`;
+      });
+    });
+  </script>
+</body>
+</html>
+<style is:global>
+  /* Layout: the edge-on disk is the x axis of a chart. Hole at 0%, red receding left, blue arriving right. */
+  #hole { position: fixed; inset: 0; width: 100%; height: 100%; }
+  #hole[data-failed] { background: linear-gradient(90deg, #ff2a1c, #ff7a24 40%, #fff 50%, #7cc0ff) center 70%/100% 3px no-repeat; }
+  .hero { position: relative; z-index: 2; }
+  h1 { margin: 0; padding: 0 var(--gut); display: flex; justify-content: space-between; font: 800 clamp(40px, 9.4vw, 178px)/1 var(--display); white-space: nowrap; pointer-events: none; }
+  h1 i { font-style: normal; } h1 span:nth-child(1) { color: #ffb3a4; } h1 span:nth-child(2) { color: var(--ink); } h1 span:nth-child(3) { color: #b9deff; }
+  .plot { position: relative; height: clamp(380px, 62vh, 640px); margin-top: 4px; }
+  #stems { position: absolute; inset: 0; width: 100%; height: 100%; } #stems line { stroke: currentColor; stroke-width: 1; stroke-opacity: .75; }
+  #marks a { position: absolute; left: 0; top: 0; display: grid; justify-items: center; text-decoration: none; line-height: 1; padding: 3px 5px; font-size: 12px; font-variant-numeric: tabular-nums; background: #070405a6; }
+  #marks a[hidden] { display: none; }
+  #marks b { font: 800 var(--s, 18px)/1 var(--display); font-variation-settings: 'wdth' 88; color: #fff; } #marks span { margin-top: 3px; }
+  #marks a:hover, #marks a:focus-visible { z-index: 3; background: var(--void); } #marks a:hover b { color: var(--ember); }
+  #axis i { position: absolute; bottom: 4px; translate: -50% 0; font-style: normal; font-size: 11px; color: var(--ink); padding-top: 8px; background: #070405b3; padding: 3px 5px; } #axis i::before { content: ''; position: absolute; left: 50%; bottom: 100%; height: 40px; border-left: 1px dotted #ffefdc88; }
+  .market { position: relative; z-index: 3; padding: 18px var(--gut) 90px; background: linear-gradient(#07040500, #070405f0 50px); }
+  .intro { display: flex; flex-wrap: wrap; gap: 14px 60px; justify-content: space-between; align-items: end; padding: 10px 0 36px; } .intro p { margin: 0; font-size: 15px; } .intro b { font-weight: 500; color: var(--ember); }
+  @media (max-width: 820px) { #marks a { font-size: 10px; } #axis i { font-size: 10px; } }
+</style>
