@@ -1,6 +1,7 @@
 import type { Scene } from '../design/horizon.ts';
 import { horizonLite } from '../design/horizon-lite.ts';
-import { GNOLAND } from '../design/palettes.ts';
+import { CORAL, GNOLAND } from '../design/palettes.ts';
+import { NETWORK } from '../core/config.ts';
 
 export interface Stage { scene: Scene; /** Splits the headline again after its text changed. */ retitle(): void }
 
@@ -15,7 +16,7 @@ export function narrowHole(): { x: number; y: number; r: number } {
 }
 
 export function createStage(place: (s: Scene) => void, onFrame: (dt: number, s: { x: number; y: number; scroll: number }) => void = () => {}): Stage {
-  const scene: Scene = { incl: 0.16, roll: 0.26, zoom: 1, dim: 1, off: [0, 0], t: 8, light: GNOLAND };
+  const scene: Scene = { incl: 0.16, roll: 0.26, zoom: 1, dim: 1, off: [0, 0], t: 8, light: NETWORK.id === 'onyx' ? CORAL : GNOLAND };
   let letters: HTMLElement[] = [], homes: { x: number; y: number }[] = [], stale = true;
   const mouse = { x: -9999, y: -9999 };
   function measure() {

@@ -10,6 +10,8 @@
   --gut: max(16px, 3.2vw);
   color-scheme: dark;
 }
+/* On the testnet the accent takes the Testnet button's coral; price colors (.up, .down) keep their meaning. */
+:root[data-net='onyx'] { --ember: var(--red); }
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
 body { margin: 0; background: var(--void); color: var(--ink); font: 400 13px/1.5 var(--data); font-stretch: 85%; }

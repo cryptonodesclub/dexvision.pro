@@ -11,6 +11,15 @@ const abs = (p: string) => new URL(p, Astro.site).href;
 <title>{title}</title>
 <meta name="description" content={description} />
 <meta name="theme-color" content="#090909" />
+<script is:inline>
+  // The chain this page reads, as pickNetwork() in core/config.ts decides it, set before the first paint
+  // so the testnet's coral accent never flashes blue.
+  (function () {
+    var ok = function (s) { return s === 'mainnet' || s === 'onyx'; }, asked = new URLSearchParams(location.search).get('network'), saved = null;
+    try { saved = localStorage.getItem('dexvision:network'); } catch (e) { /* storage blocked */ }
+    document.documentElement.dataset.net = ok(asked) ? asked : ok(saved) ? saved : 'onyx';
+  })();
+</script>
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
 <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
