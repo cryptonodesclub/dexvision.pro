@@ -8,6 +8,7 @@ import { HISTORY } from '../src/core/venues/index.ts';
 import golden from '../../../services/history/testdata/small.json';
 import { WUGNOT } from '../src/core/config.ts';
 import { createEngine } from '../src/core/engine.ts';
+import { books, outcome, tierOf, tierRange, TIERS } from '../src/core/traders.ts';
 import { BY, Indexer, IndexerError, signer, TAIL, TX, type ChainEvent, type EventFilter } from '../src/core/indexer.ts';
 import { mapPool, postJson } from '../src/core/net.ts';
 import { assertPoolPath, InputError, parseRealm } from '../src/core/paths.ts';
@@ -1018,5 +1019,29 @@ describe('who traded', () => {
   it('links to gnoscan and keeps addresses short', () => {
     expect(txUrl('ab+/=')).toBe('https://gnoscan.io/transactions/details?txhash=ab%2B%2F%3D');
     expect(shortAddress('g1uzqhpyuus8zwvuaszwfv38f3actnz9ar5tg5ms')).toBe('g1uzqhpy…g5ms');
+  });
+});
+
+describe('trader books', () => {
+  // token0 is the token; amount1 is GNOT
+  const f = (height: number, buy: boolean, amount0: number, amount1: number, by?: string) => ({ height, price: amount1 / amount0, amount0, amount1, buy, ...(by ? { by, tx: `t${height}` } : {}) });
+  const fills = [f(1, true, 100, 10, 'a'), f(2, true, 50, 10, 'b'), f(3, false, 40, 8, 'a'), f(4, true, 10, 2, 'a'), f(5, false, 5, 1)];
+  it('groups trades by signer, newest first, from either side of the pair', () => {
+    const a = books(fills, true).get('a')!;
+    expect([a.buys, a.sells, a.bought, a.sold, a.spent, a.got]).toEqual([2, 1, 110, 40, 12, 8]);
+    expect(a.trades.map((t) => [t.height, t.buy, t.tx])).toEqual([[4, true, 't4'], [3, false, 't3'], [1, true, 't1']]);
+    expect([...books(fills, true).keys()]).toEqual(['a', 'b']); // no signer, no book
+    const flipped = books(fills.map((x) => ({ ...x, amount0: x.amount1, amount1: x.amount0, buy: !x.buy })), false).get('a')!;
+    expect([flipped.bought, flipped.sold, flipped.spent, flipped.got]).toEqual([110, 40, 12, 8]);
+  });
+  it('adds up what went in, what came back and what is still held', () => {
+    const o = outcome(books(fills, true).get('a')!, 1, 0.3);
+    expect([o.spentGnot, o.gotGnot, o.volumeGnot, o.net, o.left]).toEqual([12, 8, 20, -4, 70]);
+    expect(o.leftGnot).toBeCloseTo(21); expect(o.total).toBeCloseTo(17); expect(o.tier.name).toBe('Shrimp');
+    expect(outcome(books(fills, true).get('a')!, 2, null)).toMatchObject({ spentGnot: 24, gotGnot: 16, leftGnot: null, total: null });
+  });
+  it('names sizes by decades of GNOT', () => {
+    expect([0, 99, 100, 999, 1_000, 10_000, 99_999, 100_000, 5e6].map((v) => tierOf(v).name)).toEqual(['Shrimp', 'Shrimp', 'Fish', 'Fish', 'Dolphin', 'Shark', 'Shark', 'Whale', 'Whale']);
+    expect(TIERS.map(tierRange)).toEqual(['under 100 GNOT', '100–1K GNOT', '1K–10K GNOT', '10K–100K GNOT', '100K+ GNOT']);
   });
 });

@@ -9,6 +9,7 @@ import type { Activity, LiveMarket, Snapshot, Supply } from './overview.ts';
 import { candles, priceAll, relevant, type Candle, type Trade } from './price.ts';
 import { Rpc, RpcError } from './rpc.ts';
 import { checkManifest, decodeHistory, isWorthIt } from './snapshot.ts';
+import { books, type Book } from './traders.ts';
 import { HISTORY, VENUES } from './venues/index.ts';
 import type { Market, MarketState, Token, Venue, VenueContext, VenueFactory } from './venues/venue.ts';
 
@@ -142,6 +143,14 @@ export function createEngine(o: EngineOptions = {}) {
     if (!/^g1[02-9ac-hj-np-z]{38}$/.test(account)) throw new InputError('That is not a gno.land address.');
     const is0 = m.token0 === tokenPath, got = await venueOf(m).mine(m, account, (await indexer.latestHeight()) + 1), times = await indexer.blockTimes(got.map((f) => f.height));
     return got.map((f) => ({ t: times.get(f.height)!, height: f.height, buy: is0 === f.buy, price: is0 ? f.price : 1 / f.price, amount: is0 ? f.amount0 : f.amount1 }));
+  }
+
+  /** Every account that traded in one market since it opened, with what each bought and sold. */
+  async function traders(tokenPath: string, key: string): Promise<{ books: Map<string, Book>; partial: boolean }> {
+    const { list } = await markets(), m = list.find((x) => keyOf(x) === key);
+    if (!m || (m.token0 !== tokenPath && m.token1 !== tokenPath)) throw new InputError(`No such market for ${tokenPath}.`);
+    const { fills, partial = false } = await venueOf(m).fills(m, Math.max(1, m.height), (await indexer.latestHeight()) + 1);
+    return { books: books(fills, m.token0 === tokenPath), partial };
   }
 
   /** Like `trades`, from this device alone: at once, or null. */
@@ -287,6 +296,6 @@ export function createEngine(o: EngineOptions = {}) {
     return rpc.query('vm/qfile', `${parseRealm(realm).realm}/${file}`);
   }
 
-  return { liquidity, prices, history, trades, myTrades, peekTrades, holders, sourceFiles, sourceFile, snapshot, activity, touched, token, markets, indexer, rpc };
+  return { liquidity, prices, history, trades, traders, myTrades, peekTrades, holders, sourceFiles, sourceFile, snapshot, activity, touched, token, markets, indexer, rpc };
 }
 export type Engine = ReturnType<typeof createEngine>;
